@@ -1,0 +1,8 @@
+# Keep LF line endings everywhere (Windows CI, Prettier, generated bindings).
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary
+*.car binary
+*.woff2 binary

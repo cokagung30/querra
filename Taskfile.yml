@@ -1,0 +1,99 @@
+version: '3'
+
+vars:
+  APP_NAME: "querra"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # Target OS for build/package/run. Defaults to the host OS, and is overridden
+  # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
+  # tasks below dispatch to the matching platform Taskfile via this variable.
+  GOOS: '{{.GOOS | default OS}}'
+  GOLANGCI_LINT_VERSION: v2.15.0
+  COMPOSE: docker compose -f dev/docker-compose.yml
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the application
+    cmds:
+      - task: "{{.GOOS}}:build"
+
+  package:
+    summary: Packages a production build of the application
+    cmds:
+      - task: "{{.GOOS}}:package"
+
+  run:
+    summary: Runs the application
+    cmds:
+      - task: "{{.GOOS}}:run"
+
+  dev:
+    summary: Runs the application in development mode
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  bindings:
+    summary: Regenerates frontend/bindings from the Go services
+    cmds:
+      - task: common:generate:bindings
+
+  lint:
+    summary: Runs golangci-lint, ESLint, Prettier and the TypeScript compiler
+    cmds:
+      # main.go embeds frontend/dist, so Go tooling needs a frontend build first.
+      - task: common:build:frontend
+      - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}} run
+      - task: lint:frontend
+
+  lint:frontend:
+    summary: Runs ESLint, Prettier and the TypeScript compiler on the frontend
+    dir: frontend
+    cmds:
+      - npm run lint
+      - npm run format:check
+      - npm run typecheck
+
+  test:
+    summary: Runs Go unit tests and frontend tests
+    cmds:
+      - task: common:build:frontend
+      - go test ./...
+      - task: test:frontend
+
+  test:frontend:
+    summary: Runs frontend tests (Vitest)
+    dir: frontend
+    cmds:
+      - npm run test
+
+  test:integration:
+    summary: Runs Go integration tests against the services started by `db:up`
+    env:
+      QUERRA_TEST_POSTGRES_DSN: postgres://querra:querra@127.0.0.1:55432/querra?sslmode=disable
+      QUERRA_TEST_MYSQL_DSN: querra:querra@tcp(127.0.0.1:53306)/querra?parseTime=true
+      QUERRA_TEST_MARIADB_DSN: querra:querra@tcp(127.0.0.1:53307)/querra?parseTime=true
+      QUERRA_TEST_SSH_ADDR: 127.0.0.1:52222
+      QUERRA_TEST_SSH_USER: querra
+      QUERRA_TEST_SSH_PASSWORD: querra
+    cmds:
+      - task: common:build:frontend
+      - go test -tags=integration ./...
+
+  db:up:
+    summary: Starts the test databases and SSH server from dev/docker-compose.yml
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker is required for the test databases (Docker Desktop, OrbStack or Colima)."
+    cmds:
+      - "{{.COMPOSE}} up -d --wait"
+
+  db:down:
+    summary: Stops the test databases and deletes their data volumes
+    cmds:
+      - "{{.COMPOSE}} down -v"

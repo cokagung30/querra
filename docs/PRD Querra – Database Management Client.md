@@ -113,12 +113,12 @@ Pemakai awal adalah pemilik produk dan beberapa rekan dekat. Persona di bawah me
 
 ## 8. Arsitektur dan Tech Stack
 
-- **Framework desktop:** Wails v3 (Go + webview bawaan OS). Versinya di-pin karena v3 masih beta. v3 dipilih karena mendukung pembatalan pemanggilan dari frontend, binding TypeScript, multi-window, dan updater bawaan.
+- **Framework desktop:** Wails v3 (Go + webview bawaan OS). Versinya di-pin (v3.1.0; v3 stabil sejak Oktober 2026). v3 dipilih karena mendukung pembatalan pemanggilan dari frontend, binding TypeScript, multi-window, dan updater bawaan.
 - **Backend/core:** Go; driver `pgx`, `go-sql-driver/mysql`, `modernc.org/sqlite`; SSH tunnel dengan `golang.org/x/crypto/ssh`.
 - **Frontend:** React + TypeScript, CodeMirror 6 untuk SQL editor (lebih ringan daripada Monaco, sesuai target memori dan waktu mulai), TanStack Table dengan virtualisasi untuk grid.
 - **Penyimpanan lokal:** SQLite untuk daftar koneksi, riwayat, dan snippet; `go-keyring` untuk rahasia.
 - **Distribusi:** `.dmg` untuk macOS dan installer NSIS untuk Windows; CI/CD lewat GitHub Actions. Karena dipakai internal, v1 tidak memakai sertifikat code signing berbayar: aplikasi macOS memakai ad-hoc signing tanpa notarization, dan installer Windows tidak ditandatangani.
-- **Pembaruan:** auto-update sejak v1 memakai updater bawaan Wails v3. Setiap rilis ditandatangani dengan kunci ed25519 milik sendiri dan diverifikasi aplikasi sebelum dipasang.
+- **Pembaruan:** auto-update sejak v1 memakai updater bawaan Wails v3. Setiap rilis ditandatangani dengan kunci ed25519 milik sendiri dan diverifikasi aplikasi sebelum dipasang. Rilis diterbitkan lewat GitHub Releases di repositori publik `cokagung30/querra`.
 
 Lapisan driver dibuat sebagai antarmuka (adapter) per engine supaya engine baru dapat ditambahkan tanpa mengubah UI. Rincian arsitektur dan milestone ada di `PLAN.md`.
 

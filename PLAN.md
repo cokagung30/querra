@@ -15,14 +15,14 @@ Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.m
 
 | Area | Pilihan | Catatan |
 | --- | --- | --- |
-| Desktop shell | **Wails v3** (beta) | Versi di-pin persis di `go.mod`. API Wails hanya dipakai di `main.go` dan `internal/app/`. |
+| Desktop shell | **Wails v3** (v3.1.0, stabil) | Versi di-pin persis di `go.mod`. API Wails hanya dipakai di `main.go` dan `internal/app/`. |
 | Backend | Go 1.26 | Versi toolchain di-pin di `go.mod` dan CI. |
 | Driver DB | `pgx/v5` (lewat `database/sql` + `pgx/v5/stdlib`), `go-sql-driver/mysql`, `modernc.org/sqlite` | Semua lewat `database/sql` agar adapter seragam; perilaku khusus engine ditangani di adapter. |
 | SSH tunnel | `golang.org/x/crypto/ssh` | Dialer kustom yang langsung dipasang ke driver, tanpa membuka port lokal. |
 | Rahasia | `zalando/go-keyring` | Keychain (macOS), Credential Manager (Windows). |
 | Penyimpanan lokal | SQLite (modernc, tanpa cgo) di `os.UserConfigDir()/Querra/querra.db` | Migrasi SQL di-embed, versi skema disimpan di `PRAGMA user_version`. |
 | Logging | `log/slog` ke file berotasi di direktori log aplikasi | Log tidak boleh berisi rahasia atau isi data. |
-| Frontend | React + TypeScript + Vite (template `react-ts` dari Wails) | |
+| Frontend | React 19 + TypeScript + Vite (template `react` dari Wails) | |
 | UI | Tailwind CSS v4 + shadcn/ui (Radix), `lucide-react` | Lihat risiko R3 untuk macOS 12. |
 | State | Zustand (UI, tab, perubahan tertunda) + TanStack Query (cache data dari Go) | |
 | Grid | TanStack Table + TanStack Virtual | Divalidasi lewat spike M0.2. |
@@ -42,7 +42,7 @@ Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.m
 Semua penyesuaian di bawah sudah dimasukkan ke PRD v0.2.
 
 1. **Monaco diganti CodeMirror 6.** Monaco menambah beberapa MB ke bundle dan memakan memori, padahal targetnya memori idle < 250 MB dan waktu mulai < 2 detik. `@codemirror/lang-sql` sudah menyediakan dialek dan autocomplete skema yang dibutuhkan FR-12.
-2. **Wails v3 (beta) dipilih, bukan v2.** v3 memberi `CancellablePromise` yang terhubung ke `context.Context` di Go (langsung menjawab FR-13), binding TypeScript dan event bertipe, serta dukungan multi-window. Risiko status beta dikelola lewat pin versi dan lapisan Wails yang tipis (R1).
+2. **Wails v3 dipilih, bukan v2.** v3 memberi `CancellablePromise` yang terhubung ke `context.Context` di Go (langsung menjawab FR-13), binding TypeScript dan event bertipe, serta dukungan multi-window. Saat scaffolding (7 November 2026), v3 ternyata sudah stabil (v3.0.0 rilis 26 Oktober 2026), dan versinya di-pin ke v3.1.0. Karena rilis stabilnya masih baru, risikonya dikelola lewat pin versi dan lapisan Wails yang tipis (R1).
 3. **Keychain dimajukan dari Fase 2 ke Fase 1.** Koneksi yang disimpan di Fase 1 sudah butuh password. Tidak ada fase yang boleh menyimpan password sebagai teks biasa, bahkan untuk sementara.
 4. **Fondasi tema dan registry shortcut dibangun di Fase 0.** Token warna, warna environment, dan registry perintah dibuat sejak awal. Toggle mode gelap tetap di Fase 3 dan UI pengaturan shortcut di Fase 4. Dengan begitu NFR "shortcut dapat diubah" tidak berujung pada refactor besar.
 5. **Mode hanya-baca ditegakkan di dua lapis** (sesi database dan pemeriksaan di Go), bukan hanya di UI.
@@ -242,12 +242,12 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 
 ### 4.1 Fase 0 – Fondasi dan Validasi (±2 minggu)
 
-- [ ] **M0.1 Scaffolding**
-  - `git init` dengan remote `github.com/cokagung30/querra`; `wails3 init -n querra -t react-ts -mod github.com/cokagung30/querra --productidentifier com.balikaryadigital.querra`; pin versi Wails v3 dan toolchain Go.
-  - Struktur folder sesuai §3.2, Tailwind v4 + shadcn/ui, ESLint + Prettier, golangci-lint.
-  - Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:up`, `db:down`, `bindings`.
-  - `dev/docker-compose.yml`: PostgreSQL 17, MySQL 8.4, MariaDB 11, dan openssh-server, plus data seed (lihat §5).
-  - CI: lint, unit test Go dan frontend, serta build di `macos-latest` dan `windows-latest`.
+- [ ] **M0.1 Scaffolding** — *selesai secara lokal; tinggal menunggu CI hijau setelah push pertama*
+  - [x] Repo `github.com/cokagung30/querra`; `wails3 init -n querra -t react -mod github.com/cokagung30/querra`; Wails di-pin ke v3.1.0 dan toolchain Go ke go1.26.2. Folder `build/ios`, `build/android`, dan `build/linux` dihapus karena targetnya hanya macOS dan Windows.
+  - [x] Kerangka folder awal (`internal/app`, `frontend/src/{app,components/ui,lib}`); folder lain di §3.2 dibuat oleh milestone yang membutuhkannya. React 19, Tailwind v4 + shadcn/ui (Radix, preset Nova), ESLint + Prettier, Vitest, golangci-lint v2.
+  - [x] Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:up`, `db:down`, `bindings`.
+  - [x] `dev/docker-compose.yml`: PostgreSQL 17, MySQL 8.4, MariaDB 11.4, dan openssh-server, plus data seed (lihat §5). *Belum dijalankan karena Docker belum terpasang di mesin pengembangan.*
+  - [ ] CI: lint, unit test Go dan frontend, build, dan cek binding di `macos-latest` dan `windows-latest` (`.github/workflows/ci.yml`). *Belum pernah dijalankan.*
   - Selesai jika `wails3 dev` membuka jendela di macOS dan CI hijau di kedua OS.
 - [ ] **M0.2 Spike validasi stack** (hasil dicatat di `docs/spikes/fase-0.md`)
   - Grid: 100.000 baris × 20 kolom data dummy dari Go lewat `FetchRows` bertahap; ukur kelancaran scroll di WKWebView (macOS) dan WebView2 (Windows).
@@ -264,9 +264,10 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - i18n terpasang; semua string UI melewati `t()`.
   - Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
 - [ ] **M0.4 Identitas dan repositori**
-  - Nama Querra, bundle ID `com.balikaryadigital.querra`, dan ikon awal.
-  - Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan.
-  - Tentukan visibilitas repositori `cokagung30/querra` (publik atau privat), karena ini menentukan lokasi rilis untuk auto-update (§8.3).
+  - [x] Nama Querra dan bundle ID `com.balikaryadigital.querra` di `build/config.yml` (dikerjakan bersama M0.1).
+  - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
+  - [x] Repositori `cokagung30/querra` dibuat publik, jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
+  - [ ] Ikon aplikasi awal (pengganti ikon bawaan Wails).
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
 
@@ -375,7 +376,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 - [ ] **M4.6 Packaging dan distribusi**
   - macOS: universal binary (arm64 + amd64) dengan ad-hoc signing (`codesign -s -`), lalu `.dmg`. Tanpa notarization (§8.2).
   - Windows: installer NSIS tanpa tanda tangan, dengan bootstrapper WebView2 untuk Windows 10.
-  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke lokasi rilis (§8.3); anggaran ukuran (< 60 MB) dicek otomatis.
+  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke GitHub Releases (§8.1); anggaran ukuran (< 60 MB) dicek otomatis.
 - [ ] **M4.7 Auto-update**
   - Jalankan `wails3 updater genkey` sekali saja. `updater.key` hanya disimpan di secret CI dan cadangan offline, tidak pernah di-commit; `updater.key.pub` di-embed ke aplikasi.
   - CI membuat manifest bertanda tangan (`wails3 updater manifest`) dan memverifikasinya (`wails3 updater verify`) sebelum diunggah.
@@ -431,7 +432,7 @@ Data seed di `dev/`:
 
 | ID | Risiko | Mitigasi |
 | --- | --- | --- |
-| R1 | Wails v3 masih beta, sehingga ada kemungkinan breaking change atau bug | Pin versi; API Wails hanya di `main.go` dan `internal/app/`; spike M0.2 sebagai gerbang keputusan; baca changelog sebelum upgrade |
+| R1 | Wails v3 baru stabil (v3.0.0, Oktober 2026), sehingga rilis awalnya masih mungkin membawa bug atau perubahan perilaku | Pin versi; API Wails hanya di `main.go` dan `internal/app/`; spike M0.2 sebagai gerbang keputusan; baca changelog sebelum upgrade |
 | R2 | Pembatalan query di MySQL memutus sesi | `KILL QUERY` dari koneksi terpisah (§3.8), dengan uji integrasi |
 | R3 | Tailwind v4 dirancang untuk Safari 16.4+, sementara macOS 12 yang Safari-nya belum diperbarui memakai WebKit lama | Uji di macOS 12 pada M0.2. Jika bermasalah, tetapkan syarat Safari ≥ 16.4 atau turun ke Tailwind v3.4 |
 | R4 | Toolchain Go baru bisa menaikkan versi minimum macOS | Baca release notes sebelum upgrade Go; pin toolchain di `go.mod` dan CI |
@@ -455,6 +456,7 @@ Data seed di `dev/`:
 | SQL Server di MVP? | Belum | Tetap di backlog (§9); arsitektur adapter memungkinkan penambahan nanti |
 | Target pengguna awal | Pemilik dan rekan dekat | Beta menjadi uji internal (§4.6); metrik PRD §11 disesuaikan |
 | Auto-update di v1? | Ya | Milestone M4.7, memakai updater bawaan Wails v3 dengan rilis bertanda tangan |
+| Visibilitas repositori dan lokasi rilis | Repositori `cokagung30/querra` publik; rilis lewat GitHub Releases di repo itu | M4.6 dan M4.7; aplikasi tidak perlu token GitHub |
 
 ### 8.2 Mengikuti Rekomendasi (Bisa Diubah)
 
@@ -465,9 +467,7 @@ Data seed di `dev/`:
 
 ### 8.3 Masih Terbuka
 
-| Pertanyaan | Rekomendasi awal | Tenggat |
-| --- | --- | --- |
-| Lokasi rilis untuk auto-update | Jika repositori `cokagung30/querra` publik, pakai GitHub Releases di repo itu. Jika privat, terbitkan artefak ke repo rilis publik terpisah (mis. `cokagung30/querra-releases`) atau ke hosting statis di balikaryadigital.com. Jangan menanam token GitHub di aplikasi. | Awal Fase 4 (sebelum M4.6) |
+Tidak ada untuk saat ini.
 
 ## 9. Setelah MVP (Backlog)
 

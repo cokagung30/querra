@@ -1,0 +1,16 @@
+# Build output
+bin/
+frontend/dist/
+.task/
+.wails/
+
+# Dependencies
+frontend/node_modules/
+
+# OS files
+.DS_Store
+
+# Secrets: the updater signing key and local env files never go in the repo
+updater.key
+.env
+.env.*

@@ -1,0 +1,78 @@
+# Test databases for Querra integration tests and manual testing.
+# Start with `wails3 task db:up`, stop and wipe with `wails3 task db:down`.
+# Credentials are for local testing only. Ports bind to 127.0.0.1 and avoid
+# the default ports so they don't clash with databases already on this machine.
+name: querra-dev
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: querra
+      POSTGRES_PASSWORD: querra
+      POSTGRES_DB: querra
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./seed/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h forces TCP, which only answers once the init scripts have finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U querra -d querra"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 5m
+
+  mysql:
+    image: mysql:8.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: querra-root
+      MYSQL_DATABASE: querra
+      MYSQL_USER: querra
+      MYSQL_PASSWORD: querra
+    ports:
+      - "127.0.0.1:53306:3306"
+    volumes:
+      - ./seed/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pquerra-root"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 5m
+
+  mariadb:
+    image: mariadb:11.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_ROOT_PASSWORD: querra-root
+      MARIADB_DATABASE: querra
+      MARIADB_USER: querra
+      MARIADB_PASSWORD: querra
+    ports:
+      - "127.0.0.1:53307:3306"
+    volumes:
+      - ./seed/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 5m
+
+  # SSH server for tunnel tests. From inside the tunnel the databases are
+  # reachable by service name, e.g. postgres:5432.
+  sshd:
+    image: lscr.io/linuxserver/openssh-server:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+      USER_NAME: querra
+      USER_PASSWORD: querra
+      PASSWORD_ACCESS: "true"
+      # Enables TCP forwarding, which the image disables by default.
+      DOCKER_MODS: linuxserver/mods:openssh-server-ssh-tunnel
+    ports:
+      - "127.0.0.1:52222:2222"
