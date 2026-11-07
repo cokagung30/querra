@@ -1,5 +1,5 @@
 -- Seed data for Querra integration tests and manual testing (PostgreSQL).
--- Runs once, when the container's data volume is first created.
+-- Loaded into a fresh querra_test database by dev/testdb.sh (`wails3 task db:reset`).
 
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 

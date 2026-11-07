@@ -52,3 +52,71 @@ jobs:
       - name: Check generated files are committed
         if: runner.os == 'macOS'
         run: git diff --exit-code -- go.mod go.sum frontend/bindings
+
+  # Integration tests against every supported engine version. Runs on Linux
+  # because only GitHub's Linux runners support service containers; that works
+  # because domain packages don't import Wails.
+  integration:
+    name: integration (ubuntu)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+    env:
+      QUERRA_DEV_POSTGRES_HOST: 127.0.0.1
+      QUERRA_DEV_POSTGRES_PORT: 5432
+      QUERRA_DEV_POSTGRES_ADMIN_USER: postgres
+      QUERRA_DEV_POSTGRES_ADMIN_PASSWORD: postgres
+      QUERRA_DEV_MYSQL_HOST: 127.0.0.1
+      QUERRA_DEV_MYSQL_PORT: 3306
+      QUERRA_DEV_MYSQL_ADMIN_USER: root
+      QUERRA_DEV_MYSQL_ADMIN_PASSWORD: root
+      QUERRA_DEV_MARIADB_HOST: 127.0.0.1
+      QUERRA_DEV_MARIADB_PORT: 3307
+      QUERRA_DEV_MARIADB_ADMIN_USER: root
+      QUERRA_DEV_MARIADB_ADMIN_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Seed test databases
+        run: |
+          for engine in postgres mysql mariadb; do
+            bash dev/testdb.sh reset "$engine"
+          done
+
+      - name: Integration tests
+        # internal/app imports Wails, which needs GTK/WebKit headers on Linux;
+        # the macOS and Windows jobs cover it.
+        run: |
+          pkgs=$(go list ./internal/... | grep -v '/internal/app$' || true)
+          if [ -z "$pkgs" ]; then
+            echo "No domain packages yet; nothing to test."
+            exit 0
+          fi
+          go test -tags=integration $pkgs

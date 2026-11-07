@@ -1,5 +1,6 @@
--- Seed data for Querra integration tests and manual testing (MySQL 8.4 and MariaDB 11).
--- Runs once, as root, against the `querra` database when the data volume is first created.
+-- Seed data for Querra integration tests and manual testing (MySQL 8.x and MariaDB 11).
+-- Loaded as an admin user into a fresh querra_test database by dev/testdb.sh
+-- (`wails3 task db:reset`), which also grants querra_test access to querra_test_sales.
 
 SET NAMES utf8mb4;
 
@@ -110,9 +111,8 @@ VALUES ('a', 'b', 'c', 'd', 'e');
 
 -- Second database (MySQL's equivalent of a schema): foreign-key chain, composite key,
 -- view, function.
-CREATE DATABASE querra_sales;
-GRANT ALL PRIVILEGES ON querra_sales.* TO 'querra'@'%';
-USE querra_sales;
+CREATE DATABASE querra_test_sales CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE querra_test_sales;
 
 CREATE TABLE customers (
     id    INT AUTO_INCREMENT PRIMARY KEY,

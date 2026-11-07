@@ -29,7 +29,7 @@ Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.m
 | SQL editor | **CodeMirror 6** + `@codemirror/lang-sql` | Mendukung dialek PostgreSQL/MySQL/SQLite dan autocomplete berbasis skema. |
 | Layout | `react-resizable-panels` | |
 | i18n | `i18next` + `react-i18next` | Bahasa Inggris dulu, struktur siap untuk `id`. |
-| Pengujian | `go test`, uji integrasi (build tag `integration` + Docker Compose), Vitest + Testing Library | |
+| Pengujian | `go test`, uji integrasi (build tag `integration`), Vitest + Testing Library | Tanpa Docker di mesin pengembangan: lokal memakai server database native, CI memakai service container di runner Ubuntu (§5). |
 | Lint | `golangci-lint`, ESLint + Prettier, `tsc --noEmit` | |
 | Package manager | npm | Sudah terpasang dan menjadi default template. |
 | CI/CD | GitHub Actions (`macos-latest`, `windows-latest`) | Build, uji, dan rilis (artefak + manifest update). |
@@ -106,7 +106,7 @@ querra/
 │       ├── stores/          # Zustand store lintas fitur
 │       └── i18n/            # en.json (id.json menyusul)
 ├── build/                   # konfigurasi build Wails: ikon, Info.plist, NSIS, signing
-├── dev/                     # docker-compose.yml + seed SQL untuk database uji
+├── dev/                     # seed SQL + testdb.sh untuk menyiapkan database uji
 ├── docs/                    # PRD, laporan spike, ADR, checklist QA
 ├── Taskfile.yml
 ├── PLAN.md
@@ -245,9 +245,9 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 - [ ] **M0.1 Scaffolding** — *selesai secara lokal; tinggal menunggu CI hijau setelah push pertama*
   - [x] Repo `github.com/cokagung30/querra`; `wails3 init -n querra -t react -mod github.com/cokagung30/querra`; Wails di-pin ke v3.1.0 dan toolchain Go ke go1.26.2. Folder `build/ios`, `build/android`, dan `build/linux` dihapus karena targetnya hanya macOS dan Windows.
   - [x] Kerangka folder awal (`internal/app`, `frontend/src/{app,components/ui,lib}`); folder lain di §3.2 dibuat oleh milestone yang membutuhkannya. React 19, Tailwind v4 + shadcn/ui (Radix, preset Nova), ESLint + Prettier, Vitest, golangci-lint v2.
-  - [x] Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:up`, `db:down`, `bindings`.
-  - [x] `dev/docker-compose.yml`: PostgreSQL 17, MySQL 8.4, MariaDB 11.4, dan openssh-server, plus data seed (lihat §5). *Belum dijalankan karena Docker belum terpasang di mesin pengembangan.*
-  - [ ] CI: lint, unit test Go dan frontend, build, dan cek binding di `macos-latest` dan `windows-latest` (`.github/workflows/ci.yml`). *Belum pernah dijalankan.*
+  - [x] Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:reset`, `db:drop`, `bindings`.
+  - [x] Database uji tanpa Docker (§5): `dev/testdb.sh` membuat dan mengisi `querra_test*` di server native yang dikonfigurasi lewat `dev/test.env`. Reset, seed, dan drop sudah dicoba di PostgreSQL 18.2 dan MySQL 8.0.45 lokal; MariaDB hanya diuji di CI.
+  - [ ] CI: lint, unit test Go dan frontend, build, dan cek binding di `macos-latest` dan `windows-latest`, plus job integrasi di `ubuntu-latest` dengan PostgreSQL 17, MySQL 8.4, dan MariaDB 11.4 (`.github/workflows/ci.yml`). *Belum hijau.*
   - Selesai jika `wails3 dev` membuka jendela di macOS dan CI hijau di kedua OS.
 - [ ] **M0.2 Spike validasi stack** (hasil dicatat di `docs/spikes/fase-0.md`)
   - Grid: 100.000 baris × 20 kolom data dummy dari Go lewat `FetchRows` bertahap; ukur kelancaran scroll di WKWebView (macOS) dan WebView2 (Windows).
@@ -280,7 +280,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Open dengan opsi SSL (`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, CA, sertifikat dan key klien), konfigurasi pool, `application_name=Querra`.
   - Introspector berbasis `pg_catalog`: database, schema, tabel, view, materialized view, fungsi, kolom, PK, index, FK, constraint.
   - Pemetaan tipe PG ke `kind` dan konversi nilai ke string (§3.5).
-  - Uji integrasi terhadap PostgreSQL di Docker.
+  - Uji integrasi terhadap PostgreSQL (lokal dan CI, §5).
 - [ ] **M1.3 Layanan koneksi** (FR-01, FR-03, FR-04, FR-05)
   - CRUD, duplikasi, grup, pengurutan, environment (Local/Staging/Production) dan warna, flag hanya-baca.
   - Test Connection bertahap dengan pesan error yang mudah dipahami (§3.9).
@@ -330,9 +330,9 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Autentikasi dengan password atau private key (OpenSSH/PEM, dengan passphrase); ssh-agent bersifat opsional.
   - `known_hosts`: membaca `~/.ssh/known_hosts` dan store lokal. Host baru menampilkan fingerprint dan meminta persetujuan (TOFU); kunci yang berubah ditolak dengan peringatan.
   - Dialer kustom ke pgx, keepalive, dan redial.
-  - Test Connection melaporkan tahap SSH secara terpisah. Uji integrasi memakai container openssh-server.
+  - Test Connection melaporkan tahap SSH secara terpisah. Uji integrasi memakai server SSH in-process di dalam test Go (`golang.org/x/crypto/ssh`, dengan dukungan port forwarding), jadi tidak butuh `sshd` dari luar.
 - [ ] **M2.8 Keandalan koneksi**
-  - Deteksi koneksi putus, reconnect pool otomatis, dan pemberitahuan saat sesi tab hilang (§3.8). Diuji dengan menghentikan container di tengah query.
+  - Deteksi koneksi putus, reconnect pool otomatis, dan pemberitahuan saat sesi tab hilang (§3.8). Diuji dengan memutus koneksi dari sisi server di tengah query (`pg_terminate_backend`, `KILL`) dan dengan menutup tunnel SSH in-process.
 
 ### 4.4 Fase 3 – MySQL/MariaDB, Edit Inline, Ekspor, Mode Gelap (±4 minggu)
 
@@ -407,11 +407,20 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 | Lapis | Alat | Cakupan |
 | --- | --- | --- |
 | Unit Go | `go test`, table-driven | `sqlscan`, builder Dialect, `changeset`, writer ekspor, pemetaan error, encoding sel, `store` (SQLite sementara) |
-| Integrasi Go | build tag `integration`, Docker Compose (`wails3 task db:up`) | Adapter per engine: introspeksi, tipe data, pembatalan, hanya-baca, commit changeset, SSH tunnel, reconnect |
+| Integrasi Go | build tag `integration`; lokal: server native yang disiapkan `wails3 task db:reset`; CI: service container di `ubuntu-latest` | Adapter per engine: introspeksi, tipe data, pembatalan, hanya-baca, commit changeset, SSH tunnel (server SSH in-process), reconnect |
 | Frontend | Vitest + Testing Library | Store changeset, registry shortcut, format sel, komponen grid dan editor yang penting; binding di-mock lewat wrapper `features/*/api.ts` |
 | Manual lintas OS | `docs/qa-checklist.md` | Alur utama PRD §9 di macOS dan Windows di setiap akhir fase |
 
-Data seed di `dev/`:
+Database uji (tanpa Docker di mesin pengembangan):
+
+| Lingkungan | Engine | Cara menyiapkan |
+| --- | --- | --- |
+| Lokal | Server native yang sudah ada (saat ini PostgreSQL 18 dan MySQL 8.0 dari PhpWebStudy) | Salin `dev/test.env.example` ke `dev/test.env`, lalu `wails3 task db:reset`. Engine yang `HOST`-nya kosong dilewati. |
+| CI | PostgreSQL 17, MySQL 8.4, MariaDB 11.4 | Service container di `ubuntu-latest`, diisi dengan skrip yang sama (`dev/testdb.sh`) |
+
+`dev/testdb.sh` hanya menyentuh objek bernama `querra_test*` (database `querra_test`, `querra_test_sales`, dan user `querra_test`), sehingga database lain di server tidak terganggu. Test integrasi terhubung sebagai `querra_test` dengan host dan port dari variabel `QUERRA_DEV_*`. Job integrasi di CI hanya menguji paket domain, karena `internal/app` mengimpor Wails yang di Linux butuh GTK/WebKit.
+
+Data seed di `dev/seed/`:
 
 - `big_table` dengan 1 juta baris (uji paginasi dan performa).
 - `all_types` berisi semua tipe utama per engine (uji `kind` dan presisi).

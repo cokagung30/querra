@@ -1,5 +1,9 @@
 version: '3'
 
+# Local test database settings for db:reset and test:integration (optional;
+# see dev/test.env.example).
+dotenv: ['dev/test.env']
+
 vars:
   APP_NAME: "querra"
   BIN_DIR: "bin"
@@ -10,7 +14,7 @@ vars:
   # tasks below dispatch to the matching platform Taskfile via this variable.
   GOOS: '{{.GOOS | default OS}}'
   GOLANGCI_LINT_VERSION: v2.15.0
-  COMPOSE: docker compose -f dev/docker-compose.yml
+  DB_ENGINES: postgres mysql mariadb
 
 includes:
   common: ./build/Taskfile.yml
@@ -73,27 +77,23 @@ tasks:
       - npm run test
 
   test:integration:
-    summary: Runs Go integration tests against the services started by `db:up`
-    env:
-      QUERRA_TEST_POSTGRES_DSN: postgres://querra:querra@127.0.0.1:55432/querra?sslmode=disable
-      QUERRA_TEST_MYSQL_DSN: querra:querra@tcp(127.0.0.1:53306)/querra?parseTime=true
-      QUERRA_TEST_MARIADB_DSN: querra:querra@tcp(127.0.0.1:53307)/querra?parseTime=true
-      QUERRA_TEST_SSH_ADDR: 127.0.0.1:52222
-      QUERRA_TEST_SSH_USER: querra
-      QUERRA_TEST_SSH_PASSWORD: querra
+    summary: Runs Go integration tests against the databases prepared by `db:reset`
     cmds:
+      # Tests read the QUERRA_DEV_* settings from dev/test.env and skip engines
+      # whose HOST is empty.
       - task: common:build:frontend
       - go test -tags=integration ./...
 
-  db:up:
-    summary: Starts the test databases and SSH server from dev/docker-compose.yml
-    preconditions:
-      - sh: docker info > /dev/null 2>&1
-        msg: "Docker is required for the test databases (Docker Desktop, OrbStack or Colima)."
+  db:reset:
+    summary: Recreates and seeds the querra_test databases on your local servers (dev/test.env)
     cmds:
-      - "{{.COMPOSE}} up -d --wait"
+      - for:
+          var: DB_ENGINES
+        cmd: bash dev/testdb.sh reset {{.ITEM}}
 
-  db:down:
-    summary: Stops the test databases and deletes their data volumes
+  db:drop:
+    summary: Drops the querra_test databases and user from your local servers
     cmds:
-      - "{{.COMPOSE}} down -v"
+      - for:
+          var: DB_ENGINES
+        cmd: bash dev/testdb.sh drop {{.ITEM}}
