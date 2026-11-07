@@ -15,10 +15,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/lang-sql": "^6.10.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@tanstack/react-table": "^9.3.1",
+    "@tanstack/react-virtual": "^3.14.26",
     "@wailsio/runtime": "3.1.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
+    "codemirror": "^6.0.2",
     "lucide-react": "^1.70.0",
     "radix-ui": "^1.8.1",
     "react": "^19.3.1",

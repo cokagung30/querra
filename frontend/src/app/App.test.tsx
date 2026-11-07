@@ -6,6 +6,7 @@ import { App } from './App'
 vi.mock('./api', () => ({
   getAppInfo: vi.fn().mockResolvedValue({ name: 'Querra', version: '1.2.3' }),
 }))
+vi.mock('@/features/spike/SpikePage', () => ({ SpikePage: () => null }))
 
 describe('App', () => {
   it('shows the version reported by the backend', async () => {

@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -11,6 +12,9 @@ import (
 
 // version is overridden for release builds with -ldflags "-X main.version=<version>".
 var version = "0.1.0-dev"
+
+// processStart is taken as early as Go allows, for the M0.2 startup measurement.
+var processStart = time.Now()
 
 // assets holds the built frontend (frontend/dist), served to the webview.
 //
@@ -23,6 +27,7 @@ func main() {
 		Description: "Lightweight database client",
 		Services: []application.Service{
 			application.NewService(app.NewAppService(version)),
+			application.NewService(app.NewSpikeService(processStart)), // M0.2 spike; temporary
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

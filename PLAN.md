@@ -178,6 +178,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 3. Statement yang menghasilkan baris dibaca sampai `maxRows` (default 10.000, bisa diubah) ke buffer `resultset`. Yang dikembalikan hanya ringkasan: `{resultID, columns, rowCount, truncated, durationMs}`, bukan barisnya.
 4. Grid meminta jendela data lewat `ResultService.FetchRows(resultID, offset, limit)` (200–500 baris) saat digulir. TanStack Virtual hanya merender baris yang terlihat.
 5. Buffer dibebaskan saat tab ditutup atau query dijalankan ulang. Total memori buffer dibatasi oleh setting, dan hasil di tab yang tidak aktif dikeluarkan lebih dulu (LRU).
+6. Buffer disimpan ringkas, mis. satu `[]byte` per baris plus offset sel, dan `*string` baru dibuat saat `FetchRows`. Spike M0.2 menunjukkan penyimpanan satu `*string` per sel memakan ±70–85 byte per sel: 100k × 20 sel menjadi ±142 MB.
 
 #### Grid tabel (dari penjelajah)
 
@@ -204,6 +205,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 | `settings` | `key, value_json`, termasuk keybinding |
 
 - Keychain: service `com.balikaryadigital.querra`, account `conn/<uuid>/password`, `conn/<uuid>/ssh-password`, `conn/<uuid>/ssh-passphrase`. Menghapus koneksi juga menghapus entri keychain-nya.
+- Di macOS, `go-keyring` menjalankan `/usr/bin/security`, bukan API Keychain native. Akibatnya tidak ada prompt izin setelah update build ad-hoc, tapi proses lain milik user yang sama bisa membaca rahasia tanpa prompt, kira-kira setara Credential Manager di Windows. Detail dan keputusannya ada di `docs/spikes/fase-0.md` §4.5 dan §7.
 - Untuk private key SSH, yang disimpan adalah **path file**, bukan isinya. Credential Manager Windows membatasi ukuran rahasia.
 - Frontend tidak pernah menerima password yang sudah tersimpan, hanya flag `hasPassword`.
 - Ekspor koneksi (FR-05) berupa JSON dengan field `version` dan tanpa field rahasia. Koneksi hasil impor ditandai "password diperlukan".
@@ -224,8 +226,8 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 ### 3.8 Pembatalan, Sesi, dan Reconnect
 
 - Setiap binding yang menyentuh database menerima `context.Context` sebagai argumen pertama. Pembatalan promise di frontend membatalkan ctx ini.
-- **PostgreSQL:** pgx mengirim *cancel request* saat ctx dibatalkan, dan sesi tetap bisa dipakai.
-- **MySQL/MariaDB:** `go-sql-driver/mysql` menutup koneksi saat ctx dibatalkan. Query tetap berjalan di server dan state sesi hilang. Karena itu adapter menjalankan query dengan ctx internal. Saat ctx dari pengguna batal, adapter mengirim `KILL QUERY <connection_id>` dari koneksi pool lain, sehingga sesi tetap hidup.
+- **PostgreSQL:** handler default pgx (`DeadlineContextWatcherHandler`) menghentikan query tapi **memutus koneksi**. Adapter wajib memasang `BuildContextWatcherHandler` yang mengembalikan `&pgconn.CancelRequestContextWatcherHandler{Conn: conn, DeadlineDelay: 5 * time.Second}`. Dengan begitu yang dikirim adalah cancel request protokol (error SQLSTATE 57014) dan sesi tetap hidup. Kedua perilaku ini terbukti di spike M0.2 (`docs/spikes/fase-0.md` §4.4).
+- **MySQL/MariaDB:** `go-sql-driver/mysql` menutup koneksi saat ctx dibatalkan. Query tetap berjalan di server dan state sesi hilang. Karena itu adapter menjalankan query dengan ctx internal. Saat ctx dari pengguna batal, adapter mengirim `KILL QUERY <connection_id>` dari koneksi pool lain, sehingga sesi tetap hidup. Strategi ini sudah dibuktikan di spike M0.2. `SLEEP()` yang dihentikan mengembalikan 1, sedangkan query lain mengembalikan error 1317; keduanya diperlakukan sebagai `query_cancelled`.
 - **SQLite:** pembatalan lewat ctx (interrupt).
 - Satu tab editor memiliki satu `Session` (koneksi yang di-pin), sehingga `BEGIN`/`COMMIT`, `SET`, dan temp table konsisten. Satu tab hanya menjalankan satu query pada satu waktu.
 - **Koneksi putus:** pool tersambung ulang secara otomatis. Sesi tab yang hilang ditandai, UI memberi tahu bahwa transaksi dan state sesi ikut hilang, lalu sesi baru dibuat pada eksekusi berikutnya. Statement **tidak pernah** diulang otomatis.
@@ -242,21 +244,22 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 
 ### 4.1 Fase 0 – Fondasi dan Validasi (±2 minggu)
 
-- [ ] **M0.1 Scaffolding** — *selesai secara lokal; tinggal menunggu CI hijau setelah push pertama*
+- [x] **M0.1 Scaffolding** — *selesai 7 November 2026; CI hijau di macOS, Windows, dan Ubuntu (integrasi)*
   - [x] Repo `github.com/cokagung30/querra`; `wails3 init -n querra -t react -mod github.com/cokagung30/querra`; Wails di-pin ke v3.1.0 dan toolchain Go ke go1.26.2. Folder `build/ios`, `build/android`, dan `build/linux` dihapus karena targetnya hanya macOS dan Windows.
   - [x] Kerangka folder awal (`internal/app`, `frontend/src/{app,components/ui,lib}`); folder lain di §3.2 dibuat oleh milestone yang membutuhkannya. React 19, Tailwind v4 + shadcn/ui (Radix, preset Nova), ESLint + Prettier, Vitest, golangci-lint v2.
   - [x] Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:reset`, `db:drop`, `bindings`.
   - [x] Database uji tanpa Docker (§5): `dev/testdb.sh` membuat dan mengisi `querra_test*` di server native yang dikonfigurasi lewat `dev/test.env`. Reset, seed, dan drop sudah dicoba di PostgreSQL 18.2 dan MySQL 8.0.45 lokal; MariaDB hanya diuji di CI.
   - [ ] CI: lint, unit test Go dan frontend, build, dan cek binding di `macos-latest` dan `windows-latest`, plus job integrasi di `ubuntu-latest` dengan PostgreSQL 17, MySQL 8.4, dan MariaDB 11.4 (`.github/workflows/ci.yml`). *Belum hijau.*
   - Selesai jika `wails3 dev` membuka jendela di macOS dan CI hijau di kedua OS.
-- [ ] **M0.2 Spike validasi stack** (hasil dicatat di `docs/spikes/fase-0.md`)
-  - Grid: 100.000 baris × 20 kolom data dummy dari Go lewat `FetchRows` bertahap; ukur kelancaran scroll di WKWebView (macOS) dan WebView2 (Windows).
-  - Waktu mulai (cold start), memori idle, dan ukuran installer untuk build berisi shell + CodeMirror + grid.
-  - Pembatalan: `CancellablePromise` → ctx Go → `pg_sleep(30)` benar-benar berhenti.
-  - `go-keyring`: tulis, baca, dan hapus di kedua OS, termasuk apakah macOS meminta izin akses keychain berulang setelah aplikasi di-build ulang dengan ad-hoc signing.
-  - Build tanpa tanda tangan berbayar: `.app` dengan ad-hoc signing bisa dibuka di Mac lain lewat System Settings → Privacy & Security → Open Anyway, dan installer Windows bisa dijalankan lewat SmartScreen → Run anyway.
-  - Tampilan Tailwind v4 di macOS 12 (R3).
-  - **Gerbang keputusan:** lanjut dengan TanStack Table atau ganti pustaka grid; lanjut dengan Wails v3 atau mundur ke v2.
+- [ ] **M0.2 Spike validasi stack** (hasil di `docs/spikes/fase-0.md`) — *macOS selesai; menunggu Windows dan uji manual*
+  - [x] Grid 100.000 baris × 20 kolom dari Go lewat `FetchRows` bertahap di WKWebView: ±75 fps (batas monitor) pada scroll normal.
+  - [ ] Grid yang sama di WebView2: jalankan workflow **Spike measurements** (`.github/workflows/spike.yml`).
+  - [x] Waktu mulai (median 330 ms), memori idle (76–138 MB), dan ukuran DMG universal (14 MB) di macOS. Angka Windows menyusul dari workflow yang sama.
+  - [x] Pembatalan: `CancellablePromise` → ctx Go → query berhenti, untuk PostgreSQL dan MySQL. Hasilnya mengoreksi §3.8.
+  - [x] `go-keyring` di macOS: tidak ada prompt setelah build ulang ad-hoc, tapi proses lain bisa ikut membaca (keputusan di laporan §7). Windows memakai Credential Manager, yang teruji tidak langsung lewat build CI.
+  - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway). *Manual.*
+  - [ ] Tampilan Tailwind v4 di macOS 12 (R3). *Manual, butuh perangkat macOS 12.*
+  - [x] **Gerbang keputusan (sementara, berdasarkan macOS):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3. Dibuka lagi bila WebView2 jauh di bawah target.
 - [ ] **M0.3 Shell UI dan fondasi desain**
   - Layout: sidebar, tab bar, area konten, panel hasil, status bar.
   - Token desain (terang/gelap), warna environment, font monospace untuk grid dan editor.
@@ -300,6 +303,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Sort per kolom (klik header). Filter per kolom (`=`, `≠`, `<`, `>`, `LIKE`, `IN`, `IS NULL`, `IS NOT NULL`) dikompilasi lewat Dialect dengan parameter. Tersedia juga input WHERE mentah.
   - Render berdasarkan `kind`; NULL dibedakan dari string kosong. Kolom bisa diubah lebarnya, sel atau baris bisa disalin (TSV), dan ada panel detail untuk nilai panjang atau JSON.
   - Jumlah baris berupa estimasi, dengan tombol untuk hitungan pasti.
+  - Prefetch halaman searah scroll, karena di spike M0.2 baris sempat kosong saat scroll sangat cepat. Pola dasar grid diambil dari `frontend/src/features/spike`: cache halaman LRU di luar React (`useSyncExternalStore`), TanStack Table hanya untuk model kolom, dan virtualisasi baris + kolom.
   - Selesai jika halaman pertama tabel 1 juta baris tampil < 1 detik (DB lokal) dan scroll lancar di kedua OS.
 - [ ] **M1.8 Tampilan struktur tabel**
   - Tab "Structure": kolom (tipe, nullable, default, komentar), PK, index, FK (bisa dinavigasi ke tabel tujuan), dan constraint lain.
@@ -429,6 +433,8 @@ Data seed di `dev/seed/`:
 
 ## 6. Anggaran Performa
 
+Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1` (Windows, juga dijalankan oleh workflow **Spike measurements**). Keduanya memakai mode autorun dari spike M0.2. Saat kode spike dihapus di M0.3, mode autorun untuk startup, idle, dan grid harus dipertahankan dalam bentuk lain supaya pengukuran M4.8 tetap bisa dijalankan. Hasil pertama ada di `docs/spikes/fase-0.md`.
+
 | Metrik | Target | Cara ukur | Kapan diukur |
 | --- | --- | --- | --- |
 | Waktu mulai | < 2 detik | Dari proses dimulai sampai shell UI interaktif (penanda waktu di frontend) | M0.2, M4.8 |
@@ -442,7 +448,7 @@ Data seed di `dev/seed/`:
 | ID | Risiko | Mitigasi |
 | --- | --- | --- |
 | R1 | Wails v3 baru stabil (v3.0.0, Oktober 2026), sehingga rilis awalnya masih mungkin membawa bug atau perubahan perilaku | Pin versi; API Wails hanya di `main.go` dan `internal/app/`; spike M0.2 sebagai gerbang keputusan; baca changelog sebelum upgrade |
-| R2 | Pembatalan query di MySQL memutus sesi | `KILL QUERY` dari koneksi terpisah (§3.8), dengan uji integrasi |
+| R2 | Pembatalan query di MySQL memutus sesi | `KILL QUERY` dari koneksi terpisah (§3.8); terbukti di spike M0.2 dan nanti dikunci dengan uji integrasi |
 | R3 | Tailwind v4 dirancang untuk Safari 16.4+, sementara macOS 12 yang Safari-nya belum diperbarui memakai WebKit lama | Uji di macOS 12 pada M0.2. Jika bermasalah, tetapkan syarat Safari ≥ 16.4 atau turun ke Tailwind v3.4 |
 | R4 | Toolchain Go baru bisa menaikkan versi minimum macOS | Baca release notes sebelum upgrade Go; pin toolchain di `go.mod` dan CI |
 | R5 | Angka besar kehilangan presisi di JavaScript | Semua sel dikirim sebagai string (§3.5) |
