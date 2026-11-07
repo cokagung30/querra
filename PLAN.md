@@ -270,7 +270,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Nama Querra dan bundle ID `com.balikaryadigital.querra` di `build/config.yml` (dikerjakan bersama M0.1).
   - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
   - [x] Repositori `cokagung30/querra` dibuat publik, jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
-  - [ ] Ikon aplikasi awal (pengganti ikon bawaan Wails).
+  - [x] Ikon aplikasi dari logo Querra (`build/icon-src/`): squircle navy untuk macOS (termasuk ikon Icon Composer macOS 26), logo transparan untuk Windows, serta ikon dan background DMG tanpa branding Wails.
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
 
