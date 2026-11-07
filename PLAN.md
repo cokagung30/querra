@@ -1,6 +1,6 @@
 # PLAN: Querra – Rencana Implementasi
 
-*Turunan dari PRD v0.1 (7 November 2026) · Status: belum di-scaffold · Pelaksana: 1 developer + Claude Code*
+*Turunan dari PRD v0.2 (7 November 2026) · Status: belum di-scaffold · Pelaksana: 1 developer + Claude Code · Pemakai: pribadi dan rekan dekat (alat internal balikaryadigital.com)*
 
 Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.md`) menjadi keputusan teknis, arsitektur, dan milestone yang bisa dikerjakan berurutan. Dokumen ini hidup: centang tugas saat selesai, dan perbarui bagian arsitektur bila implementasi menyimpang.
 
@@ -9,7 +9,7 @@ Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.m
 - Milestone diberi kode `M<fase>.<nomor>` (mis. `M1.7`) dan dikerjakan berurutan. Setiap milestone adalah potongan vertikal yang bisa didemokan, berukuran kira-kira 1–4 sesi kerja dengan Claude Code.
 - Jangan mulai fitur milestone berikutnya sebelum milestone aktif memenuhi *Definition of Done* (§4.7).
 - Kode milestone dipakai di pesan commit, mis. `feat(grid): M1.7 server-side pagination`.
-- Estimasi fase mengikuti PRD (total ±20 minggu). Pada mode solo, hambatan terbesar biasanya bukan menulis kode, tetapi verifikasi manual lintas OS, code signing, dan pengujian dengan database sungguhan.
+- Estimasi fase mengikuti PRD (total ±20 minggu). Pada mode solo, hambatan terbesar biasanya bukan menulis kode, tetapi verifikasi manual lintas OS, packaging, dan pengujian dengan database sungguhan.
 
 ## 1. Keputusan Teknis
 
@@ -32,16 +32,23 @@ Dokumen ini menerjemahkan PRD (`docs/PRD Querra – Database Management Client.m
 | Pengujian | `go test`, uji integrasi (build tag `integration` + Docker Compose), Vitest + Testing Library | |
 | Lint | `golangci-lint`, ESLint + Prettier, `tsc --noEmit` | |
 | Package manager | npm | Sudah terpasang dan menjadi default template. |
-| CI/CD | GitHub Actions (`macos-latest`, `windows-latest`) | |
+| CI/CD | GitHub Actions (`macos-latest`, `windows-latest`) | Build, uji, dan rilis (artefak + manifest update). |
+| Identitas | Module `github.com/cokagung30/querra`, bundle ID `com.balikaryadigital.querra` | |
+| Distribusi | `.dmg` (macOS) dan installer NSIS (Windows), tanpa sertifikat code signing berbayar | Alat internal; lihat §8. |
+| Auto-update | Updater bawaan Wails v3 | Setiap rilis ditandatangani dengan kunci ed25519 sendiri (`wails3 updater`). |
 
-## 2. Penyesuaian terhadap PRD
+## 2. Penyesuaian terhadap PRD v0.1
+
+Semua penyesuaian di bawah sudah dimasukkan ke PRD v0.2.
 
 1. **Monaco diganti CodeMirror 6.** Monaco menambah beberapa MB ke bundle dan memakan memori, padahal targetnya memori idle < 250 MB dan waktu mulai < 2 detik. `@codemirror/lang-sql` sudah menyediakan dialek dan autocomplete skema yang dibutuhkan FR-12.
 2. **Wails v3 (beta) dipilih, bukan v2.** v3 memberi `CancellablePromise` yang terhubung ke `context.Context` di Go (langsung menjawab FR-13), binding TypeScript dan event bertipe, serta dukungan multi-window. Risiko status beta dikelola lewat pin versi dan lapisan Wails yang tipis (R1).
 3. **Keychain dimajukan dari Fase 2 ke Fase 1.** Koneksi yang disimpan di Fase 1 sudah butuh password. Tidak ada fase yang boleh menyimpan password sebagai teks biasa, bahkan untuk sementara.
 4. **Fondasi tema dan registry shortcut dibangun di Fase 0.** Token warna, warna environment, dan registry perintah dibuat sejak awal. Toggle mode gelap tetap di Fase 3 dan UI pengaturan shortcut di Fase 4. Dengan begitu NFR "shortcut dapat diubah" tidak berujung pada refactor besar.
 5. **Mode hanya-baca ditegakkan di dua lapis** (sesi database dan pemeriksaan di Go), bukan hanya di UI.
-6. **Metrik crash butuh keputusan.** Target "crash < 1% sesi" (PRD §11) butuh data, sementara PRD melarang telemetri tanpa izin. Usulan: crash report *opt-in* (default mati) ditambah log lokal yang bisa dilampirkan pengguna. Lihat §8.
+6. **Tanpa layanan crash reporting.** Dengan pemakai yang sedikit, crash cukup dicatat ke log lokal dan dikirim manual bila perlu. Ini sejalan dengan larangan telemetri.
+7. **Distribusi internal tanpa code signing berbayar.** Querra tidak diperdagangkan dan hanya dipakai sendiri serta oleh rekan dekat, jadi v1 tidak memakai Apple Developer Program maupun sertifikat Windows. Akibatnya macOS (Gatekeeper) dan Windows (SmartScreen) menampilkan peringatan saat aplikasi pertama kali dibuka. Panduannya ditulis di B.3.
+8. **Auto-update sejak v1** memakai updater bawaan Wails v3, dengan rilis yang ditandatangani kunci ed25519 sendiri. Keamanan pembaruan tidak bergantung pada sertifikat berbayar.
 
 ## 3. Arsitektur
 
@@ -114,49 +121,49 @@ package driver
 type Engine string
 
 const (
-	Postgres Engine = "postgres"
-	MySQL    Engine = "mysql" // juga MariaDB
-	SQLite   Engine = "sqlite"
+    Postgres Engine = "postgres"
+    MySQL    Engine = "mysql" // juga MariaDB
+    SQLite   Engine = "sqlite"
 )
 
 // Driver adalah titik masuk satu engine; didaftarkan ke registry saat init.
 type Driver interface {
-	Engine() Engine
-	Capabilities() Capabilities // mis. HasSchemas, MultiDatabase, SupportsReturning
-	Dialect() Dialect
-	Open(ctx context.Context, cfg Config, dial DialFunc) (Conn, error)
+    Engine() Engine
+    Capabilities() Capabilities // mis. HasSchemas, MultiDatabase, SupportsReturning
+    Dialect() Dialect
+    Open(ctx context.Context, cfg Config, dial DialFunc) (Conn, error)
 }
 
 // Conn mewakili satu target (server + database) yang sedang terbuka.
 type Conn interface {
-	Pool() *sql.DB                                   // grid, introspeksi, ekspor
-	NewSession(ctx context.Context) (Session, error) // koneksi yang di-pin untuk satu tab editor
-	Introspector() Introspector
-	Close() error
+    Pool() *sql.DB                                   // grid, introspeksi, ekspor
+    NewSession(ctx context.Context) (Session, error) // koneksi yang di-pin untuk satu tab editor
+    Introspector() Introspector
+    Close() error
 }
 
 // Session menyimpan state sesi (transaksi, SET, temp table) milik satu tab editor.
 // Implementasi wajib menghormati pembatalan ctx tanpa merusak sesi (lihat §3.8).
 type Session interface {
-	Query(ctx context.Context, stmt string) (*sql.Rows, error)
-	Exec(ctx context.Context, stmt string) (sql.Result, error)
-	Close() error
+    Query(ctx context.Context, stmt string) (*sql.Rows, error)
+    Exec(ctx context.Context, stmt string) (sql.Result, error)
+    Close() error
 }
 
 type Introspector interface {
-	Databases(ctx context.Context) ([]Database, error)
-	Schemas(ctx context.Context) ([]Schema, error)
-	Objects(ctx context.Context, schema string) ([]Object, error) // table, view, matview, function
-	Table(ctx context.Context, ref TableRef) (*TableInfo, error)  // kolom, PK, index, FK, constraint
-	EstimateRows(ctx context.Context, ref TableRef) (int64, error)
+    Databases(ctx context.Context) ([]Database, error)
+    Schemas(ctx context.Context) ([]Schema, error)
+    Objects(ctx context.Context, schema string) ([]Object, error) // table, view, matview, function
+    Table(ctx context.Context, ref TableRef) (*TableInfo, error)  // kolom, PK, index, FK, constraint
+    EstimateRows(ctx context.Context, ref TableRef) (int64, error)
 }
 
 type Dialect interface {
-	QuoteIdent(name string) string
-	Placeholder(n int) string                     // "$1" vs "?"
-	BuildSelect(q TableQuery) (string, []any)     // filter, sort, limit/offset
-	BuildChange(c RowChange) (string, []any)      // insert/update/delete satu baris
-	ReadOnlySessionSQL() string
+    QuoteIdent(name string) string
+    Placeholder(n int) string                     // "$1" vs "?"
+    BuildSelect(q TableQuery) (string, []any)     // filter, sort, limit/offset
+    BuildChange(c RowChange) (string, []any)      // insert/update/delete satu baris
+    ReadOnlySessionSQL() string
 }
 ```
 
@@ -164,7 +171,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 
 ### 3.4 Alur Data Hasil Query
 
-**SQL editor**
+#### SQL editor
 
 1. Frontend memanggil `QueryService.Execute(tabID, sql, opts)` dan mendapat `CancellablePromise`.
 2. Go memecah teks menjadi statement (`sqlscan`), menjalankan pemeriksaan keamanan (§3.7), lalu mengeksekusi statement satu per satu di `Session` milik tab tersebut.
@@ -172,7 +179,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 4. Grid meminta jendela data lewat `ResultService.FetchRows(resultID, offset, limit)` (200–500 baris) saat digulir. TanStack Virtual hanya merender baris yang terlihat.
 5. Buffer dibebaskan saat tab ditutup atau query dijalankan ulang. Total memori buffer dibatasi oleh setting, dan hasil di tab yang tidak aktif dikeluarkan lebih dulu (LRU).
 
-**Grid tabel (dari penjelajah)**
+#### Grid tabel (dari penjelajah)
 
 - Paginasi di sisi server: `DataService.FetchPage(tableRef, filters, sort, page, pageSize)` dikompilasi oleh `Dialect.BuildSelect` menjadi `SELECT … LIMIT/OFFSET` dengan parameter. Ukuran halaman default 1.000 baris.
 - Jumlah baris memakai estimasi statistik (`pg_class.reltuples`, `information_schema.TABLES.TABLE_ROWS`). Hitungan pasti (`COUNT(*)`) hanya dijalankan atas permintaan.
@@ -196,7 +203,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 | `snippets` | `id, name, sql, engine (nullable), tags, created_at, updated_at` |
 | `settings` | `key, value_json`, termasuk keybinding |
 
-- Keychain: service `app.querra`, account `conn/<uuid>/password`, `conn/<uuid>/ssh-password`, `conn/<uuid>/ssh-passphrase`. Menghapus koneksi juga menghapus entri keychain-nya.
+- Keychain: service `com.balikaryadigital.querra`, account `conn/<uuid>/password`, `conn/<uuid>/ssh-password`, `conn/<uuid>/ssh-passphrase`. Menghapus koneksi juga menghapus entri keychain-nya.
 - Untuk private key SSH, yang disimpan adalah **path file**, bukan isinya. Credential Manager Windows membatasi ukuran rahasia.
 - Frontend tidak pernah menerima password yang sudah tersimpan, hanya flag `hasPassword`.
 - Ekspor koneksi (FR-05) berupa JSON dengan field `version` dan tanpa field rahasia. Koneksi hasil impor ditandai "password diperlukan".
@@ -236,7 +243,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 ### 4.1 Fase 0 – Fondasi dan Validasi (±2 minggu)
 
 - [ ] **M0.1 Scaffolding**
-  - `git init`; `wails3 init -n querra -t react-ts -mod <module path>`; pin versi Wails v3 dan toolchain Go.
+  - `git init` dengan remote `github.com/cokagung30/querra`; `wails3 init -n querra -t react-ts -mod github.com/cokagung30/querra --productidentifier com.balikaryadigital.querra`; pin versi Wails v3 dan toolchain Go.
   - Struktur folder sesuai §3.2, Tailwind v4 + shadcn/ui, ESLint + Prettier, golangci-lint.
   - Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:up`, `db:down`, `bindings`.
   - `dev/docker-compose.yml`: PostgreSQL 17, MySQL 8.4, MariaDB 11, dan openssh-server, plus data seed (lihat §5).
@@ -246,7 +253,8 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Grid: 100.000 baris × 20 kolom data dummy dari Go lewat `FetchRows` bertahap; ukur kelancaran scroll di WKWebView (macOS) dan WebView2 (Windows).
   - Waktu mulai (cold start), memori idle, dan ukuran installer untuk build berisi shell + CodeMirror + grid.
   - Pembatalan: `CancellablePromise` → ctx Go → `pg_sleep(30)` benar-benar berhenti.
-  - `go-keyring`: tulis, baca, dan hapus di kedua OS.
+  - `go-keyring`: tulis, baca, dan hapus di kedua OS, termasuk apakah macOS meminta izin akses keychain berulang setelah aplikasi di-build ulang dengan ad-hoc signing.
+  - Build tanpa tanda tangan berbayar: `.app` dengan ad-hoc signing bisa dibuka di Mac lain lewat System Settings → Privacy & Security → Open Anyway, dan installer Windows bisa dijalankan lewat SmartScreen → Run anyway.
   - Tampilan Tailwind v4 di macOS 12 (R3).
   - **Gerbang keputusan:** lanjut dengan TanStack Table atau ganti pustaka grid; lanjut dengan Wails v3 atau mundur ke v2.
 - [ ] **M0.3 Shell UI dan fondasi desain**
@@ -255,10 +263,10 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id dan keybinding default.
   - i18n terpasang; semua string UI melewati `t()`.
   - Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
-- [ ] **M0.4 Administrasi dengan waktu tunggu panjang** (berjalan paralel)
-  - Daftar Apple Developer Program dan siapkan code signing Windows (mis. Azure Trusted Signing atau sertifikat OV).
-  - Cek merek dagang dan ketersediaan domain "Querra".
-  - Putuskan model bisnis dan lisensi (§8) sebelum repositori dibuka untuk publik.
+- [ ] **M0.4 Identitas dan repositori**
+  - Nama Querra, bundle ID `com.balikaryadigital.querra`, dan ikon awal.
+  - Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan.
+  - Tentukan visibilitas repositori `cokagung30/querra` (publik atau privat), karena ini menentukan lokasi rilis untuk auto-update (§8.3).
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
 
@@ -364,22 +372,27 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 - [ ] **M4.5 Pengaturan dan shortcut**
   - Halaman settings: batas baris, ukuran halaman, font, tema, dan retensi riwayat. Editor keybinding untuk mengubah, me-reset, dan mendeteksi bentrok shortcut.
   - Audit i18n (tidak ada string hardcoded) dan audit navigasi keyboard penuh.
-- [ ] **M4.6 Packaging dan signing**
-  - macOS: universal binary (arm64 + amd64), codesign dengan hardened runtime, notarize + staple, lalu `.dmg`.
-  - Windows: installer NSIS yang ditandatangani, dengan bootstrapper WebView2 untuk Windows 10.
-  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke GitHub Releases; anggaran ukuran (< 60 MB) dicek otomatis.
-- [ ] **M4.7 Performa dan keandalan**
+- [ ] **M4.6 Packaging dan distribusi**
+  - macOS: universal binary (arm64 + amd64) dengan ad-hoc signing (`codesign -s -`), lalu `.dmg`. Tanpa notarization (§8.2).
+  - Windows: installer NSIS tanpa tanda tangan, dengan bootstrapper WebView2 untuk Windows 10.
+  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke lokasi rilis (§8.3); anggaran ukuran (< 60 MB) dicek otomatis.
+- [ ] **M4.7 Auto-update**
+  - Jalankan `wails3 updater genkey` sekali saja. `updater.key` hanya disimpan di secret CI dan cadangan offline, tidak pernah di-commit; `updater.key.pub` di-embed ke aplikasi.
+  - CI membuat manifest bertanda tangan (`wails3 updater manifest`) dan memverifikasinya (`wails3 updater verify`) sebelum diunggah.
+  - Di aplikasi: cek pembaruan saat start (bisa dimatikan di settings) dan lewat menu, lalu tampilkan catatan rilis. Pengguna yang memutuskan kapan memasang. Pembaruan tidak dipasang selagi ada perubahan tertunda atau query yang berjalan.
+  - Uji alur pembaruan pada build ad-hoc-signed di macOS dan build tanpa tanda tangan di Windows.
+- [ ] **M4.8 Performa dan keandalan**
   - Ukur ulang anggaran di §6 pada perangkat acuan; profil memori dengan pprof; analisis bundle (editor dan grid di-code-split).
-  - Log ke file dan menu "Open Logs Folder"; crash report sesuai keputusan di §8.
-- [ ] **M4.8 (Opsional, bila waktu cukup) Visualisasi relasi sederhana** (P2)
+  - Log ke file dan menu "Open Logs Folder" untuk melampirkan log saat melaporkan masalah.
+- [ ] **M4.9 (Opsional, bila waktu cukup) Visualisasi relasi sederhana** (P2)
   - Diagram FK satu tabel (relasi masuk dan keluar) di tab Structure.
 
 ### 4.6 Beta (±3 minggu)
 
-- [ ] **B.1** Distribusi beta tertutup (build yang sudah ditandatangani) dan saluran umpan balik.
-- [ ] **B.2** Triage dan perbaikan bug; uji regresi manual di macOS 12, macOS terbaru (Intel dan Apple Silicon), serta Windows 10 dan 11.
-- [ ] **B.3** Dokumentasi: README, panduan pengguna singkat (termasuk catatan mode hanya-baca di §3.7), dan catatan rilis.
-- [ ] **B.4** Rilis publik v1.0.
+- [ ] **B.1** Uji internal: Querra dipakai sehari-hari oleh pemilik dan dibagikan ke rekan dekat lewat jalur auto-update. Umpan balik dicatat di GitHub Issues.
+- [ ] **B.2** Triage dan perbaikan bug; uji regresi manual di macOS 12, macOS terbaru (Intel dan Apple Silicon), serta Windows 10 dan 11 (sejauh perangkatnya tersedia).
+- [ ] **B.3** Dokumentasi: README, panduan instalasi build tanpa tanda tangan (Gatekeeper dan SmartScreen), panduan pengguna singkat (termasuk catatan mode hanya-baca di §3.7), dan catatan rilis.
+- [ ] **B.4** Rilis v1.0 untuk pemakaian internal.
 
 ### 4.7 Definition of Done (Setiap Milestone)
 
@@ -408,9 +421,9 @@ Data seed di `dev/`:
 
 | Metrik | Target | Cara ukur | Kapan diukur |
 | --- | --- | --- | --- |
-| Waktu mulai | < 2 detik | Dari proses dimulai sampai shell UI interaktif (penanda waktu di frontend) | M0.2, M4.7 |
-| Memori idle | < 250 MB | Activity Monitor / Task Manager, **termasuk proses webview** | M0.2, M4.7 |
-| Scroll 100.000 baris | Tanpa patah-patah yang terlihat (~60 fps) | Panel Performance di DevTools webview | M0.2, M1.7, M4.7 |
+| Waktu mulai | < 2 detik | Dari proses dimulai sampai shell UI interaktif (penanda waktu di frontend) | M0.2, M4.8 |
+| Memori idle | < 250 MB | Activity Monitor / Task Manager, **termasuk proses webview** | M0.2, M4.8 |
+| Scroll 100.000 baris | Tanpa patah-patah yang terlihat (~60 fps) | Panel Performance di DevTools webview | M0.2, M1.7, M4.8 |
 | Ukuran installer | < 60 MB | Ukuran `.dmg` dan installer Windows | M0.2, M4.6 |
 | Halaman pertama tabel 1 juta baris | < 1 detik (DB lokal) | Log durasi di Go | M1.7 |
 
@@ -427,21 +440,38 @@ Data seed di `dev/`:
 | R7 | Sebagian Windows 10 belum punya WebView2 | Bootstrapper WebView2 di installer |
 | R8 | Batas ukuran rahasia di Credential Manager | Simpan path private key, bukan isinya |
 | R9 | Waktu verifikasi di Windows terbatas karena pengembangan utama di macOS | VM atau mesin uji Windows, build CI di setiap push, checklist QA per fase |
+| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru | Diuji di M0.2; panduan instalasi (B.3); pertimbangkan Apple Developer Program bila pemakai bertambah |
+| R11 | Kunci privat updater bocor, sehingga pihak lain bisa menerbitkan pembaruan palsu | Kunci hanya di secret CI dan cadangan offline, tidak pernah di repositori |
 
-## 8. Keputusan Terbuka
+## 8. Keputusan
+
+### 8.1 Sudah Diputuskan (7 November 2026)
+
+| Pertanyaan | Keputusan | Dampak pada rencana |
+| --- | --- | --- |
+| Module path Go | `github.com/cokagung30/querra` | M0.1 |
+| Model bisnis dan lisensi | Untuk pemakaian pribadi, tidak diperdagangkan | Tanpa sistem lisensi dan pembatasan fitur; tanpa lisensi open source (M0.4) |
+| Merek | Tetap "Querra", sebagai alat yang dipakai usaha balikaryadigital.com | Bundle ID `com.balikaryadigital.querra`; pemeriksaan merek dagang formal belum diperlukan |
+| SQL Server di MVP? | Belum | Tetap di backlog (§9); arsitektur adapter memungkinkan penambahan nanti |
+| Target pengguna awal | Pemilik dan rekan dekat | Beta menjadi uji internal (§4.6); metrik PRD §11 disesuaikan |
+| Auto-update di v1? | Ya | Milestone M4.7, memakai updater bawaan Wails v3 dengan rilis bertanda tangan |
+
+### 8.2 Mengikuti Rekomendasi (Bisa Diubah)
+
+| Pertanyaan | Rekomendasi yang dipakai | Alasan |
+| --- | --- | --- |
+| Code signing dan notarization berbayar | Tidak di v1: macOS memakai ad-hoc signing, installer Windows tanpa tanda tangan | Pemakai sedikit dan saling kenal, jadi biaya Apple Developer Program dan sertifikat Windows tidak sebanding. Ditinjau ulang bila distribusi diperluas (R10). |
+| Crash reporting | Tanpa layanan crash reporting; log lokal + menu "Open Logs Folder" | Sejalan dengan larangan telemetri dan cukup untuk pemakai yang sedikit |
+
+### 8.3 Masih Terbuka
 
 | Pertanyaan | Rekomendasi awal | Tenggat |
 | --- | --- | --- |
-| Module path Go | Mis. `github.com/<owner>/querra` | M0.1 |
-| Model bisnis dan lisensi | Memengaruhi file LICENSE, pembatasan fitur, dan kebutuhan sistem lisensi; harus diputuskan sebelum repositori publik | Akhir Fase 0 |
-| Merek dagang dan domain "Querra" | Cek sebelum aset branding dibuat | M0.4 |
-| SQL Server di MVP? | Tidak. Arsitektur adapter memungkinkan penambahan setelah MVP | Akhir Fase 1 |
-| Target pengguna awal | Menentukan saluran beta dan prioritas polishing | Sebelum Beta |
-| Auto-update di v1? | Disarankan ya, karena klien database butuh jalur cepat untuk patch keamanan. Evaluasi opsi updater (bawaan Wails v3 bila tersedia, atau solusi eksternal) | Awal Fase 4 |
-| Crash reporting vs larangan telemetri | Opt-in, default mati, ditambah log lokal | Awal Fase 4 |
+| Lokasi rilis untuk auto-update | Jika repositori `cokagung30/querra` publik, pakai GitHub Releases di repo itu. Jika privat, terbitkan artefak ke repo rilis publik terpisah (mis. `cokagung30/querra-releases`) atau ke hosting statis di balikaryadigital.com. Jangan menanam token GitHub di aplikasi. | Awal Fase 4 (sebelum M4.6) |
 
 ## 9. Setelah MVP (Backlog)
 
 - Fitur P3: ubah struktur tabel lewat GUI, pembanding skema, sistem plugin.
 - SQL Server, versi Linux, ERD, asisten AI untuk menulis query.
+- Distribusi lebih luas: code signing dan notarization berbayar, lisensi, situs produk.
 - Satu jendela per koneksi (multi-window Wails v3), keyset pagination untuk halaman yang dalam, visualisasi EXPLAIN, SSH jump host.

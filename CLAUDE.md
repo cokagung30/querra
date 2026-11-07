@@ -1,7 +1,8 @@
 # CLAUDE.md
 
-Querra is a lightweight desktop database client (PostgreSQL, MySQL/MariaDB, SQLite) for macOS 12+ and Windows 10/11, built with **Wails v3** (Go backend + OS webview) and React/TypeScript.
+Querra is a lightweight desktop database client (PostgreSQL, MySQL/MariaDB, SQLite) for macOS 12+ and Windows 10/11, built with **Wails v3** (Go backend + OS webview) and React/TypeScript. It's an internal tool for personal use and the owner's business (balikaryadigital.com), shared with a few close friends. It isn't sold, so there is no licensing, no feature gating, and no paid code signing.
 
+- Identity: Go module `github.com/cokagung30/querra`, bundle ID `com.balikaryadigital.querra`.
 - Requirements: `docs/PRD Querra – Database Management Client.md` (Indonesian)
 - Architecture, milestones, decisions: `PLAN.md` (Indonesian). Section refs like "PLAN §3.7" point there.
 - Status: pre-scaffold. Commands and paths below describe the target layout created in milestone M0.1.
@@ -73,11 +74,12 @@ Dependencies point one way: frontend → `frontend/bindings` → `internal/app` 
 
 ## Secrets and privacy
 
-- Passwords, SSH passwords, and key passphrases go to the OS keychain only, via `internal/secrets` (service `app.querra`, account `conn/<id>/<kind>`). Never put them in SQLite, logs, exports, error messages, or test fixtures.
+- Passwords, SSH passwords, and key passphrases go to the OS keychain only, via `internal/secrets` (service `com.balikaryadigital.querra`, account `conn/<id>/<kind>`). Never put them in SQLite, logs, exports, error messages, or test fixtures.
 - After saving, a secret is never sent back to the frontend; it only gets `hasPassword`-style flags.
 - Store SSH private key **paths**, not key contents (Windows Credential Manager has a small size limit).
 - Logs must not contain secrets, DSNs with passwords, or row data.
-- No network traffic except to the DB/SSH hosts the user configured. No telemetry.
+- No network traffic except to the DB/SSH hosts the user configured, plus the update check (Wails v3 updater). The update check sends only version and platform, and the user can turn it off. No telemetry.
+- The updater signing key (`updater.key`) lives only in CI secrets and an offline backup. Never commit it; only `updater.key.pub` is embedded in the app.
 - Tests use the in-memory fake from `internal/secrets`, never the real keychain.
 
 ## Go conventions
@@ -116,4 +118,5 @@ Startup < 2 s · idle memory < 250 MB (including webview processes) · smooth sc
 - MySQL: cancelling the ctx in go-sql-driver closes the connection, but the query keeps running on the server. The adapter cancels with `KILL QUERY` from another connection instead (PLAN §3.8). `mysql.RegisterDialContext` and `mysql.RegisterTLSConfig` are global registries, so use a unique name per connection.
 - PostgreSQL: one pool per database. Switching databases means opening a new pool.
 - Keep the build cgo-free on Windows: modernc.org/sqlite is pure Go, so don't introduce cgo-based drivers.
+- Release builds are ad-hoc signed on macOS (not notarized) and unsigned on Windows, so Gatekeeper and SmartScreen warnings are expected. Don't add build or release steps that assume a paid signing identity unless PLAN §8 changes.
 - Pin Wails and the Go toolchain. New Go releases can raise the minimum macOS version, and the PRD requires macOS 12.

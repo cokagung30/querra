@@ -1,10 +1,12 @@
 # PRD: Querra – Database Management Client
 
-*Versi 0.1 (Draft) · 7 November 2026 · Nama produk: Querra*
+*Versi 0.2 (Draft) · 7 November 2026 · Nama produk: Querra*
 
 ## 1. Ringkasan
 
 Querra adalah aplikasi desktop native-feel untuk macOS dan Windows yang membantu developer dan administrator mengelola database: terhubung ke server, menjelajahi struktur, menjalankan query SQL, serta melihat dan mengedit data lewat antarmuka tabel yang cepat dan bersih. Pengalaman yang dituju mirip TablePlus: ringan, cepat dibuka, dan fokus pada pekerjaan harian.
+
+Querra dikembangkan untuk pemakaian pribadi dan sebagai alat kerja usaha balikaryadigital.com. Aplikasi ini tidak diperdagangkan; pemakai awalnya adalah pemilik produk dan rekan dekat.
 
 ## 2. Latar Belakang dan Masalah
 
@@ -33,8 +35,12 @@ Querra menjawab ini dengan aplikasi yang ringan, aman untuk kredensial, dan jela
 - Fitur kolaborasi tim dan sinkronisasi cloud.
 - Dukungan NoSQL penuh (MongoDB, Redis) dan versi Linux.
 - Fitur AI untuk menulis query (dipertimbangkan setelah MVP).
+- Dukungan SQL Server (dipertimbangkan setelah MVP).
+- Komersialisasi: sistem lisensi, pembatasan fitur, dan distribusi publik.
 
 ## 4. Target Pengguna
+
+Pemakai awal adalah pemilik produk dan beberapa rekan dekat. Persona di bawah menggambarkan jenis pekerjaan yang perlu didukung, bukan segmen pasar.
 
 | Persona | Kebutuhan utama |
 | --- | --- |
@@ -105,15 +111,16 @@ Querra menjawab ini dengan aplikasi yang ringan, aman untuk kredensial, dan jela
 - **Aksesibilitas:** navigasi keyboard penuh dan shortcut yang dapat diubah.
 - **Lokalisasi:** antarmuka awal dalam bahasa Inggris, dengan struktur siap untuk bahasa Indonesia.
 
-## 8. Arsitektur dan Tech Stack (Usulan)
+## 8. Arsitektur dan Tech Stack
 
-- **Framework desktop:** Wails (Go + webview bawaan OS).
+- **Framework desktop:** Wails v3 (Go + webview bawaan OS). Versinya di-pin karena v3 masih beta. v3 dipilih karena mendukung pembatalan pemanggilan dari frontend, binding TypeScript, multi-window, dan updater bawaan.
 - **Backend/core:** Go; driver `pgx`, `go-sql-driver/mysql`, `modernc.org/sqlite`; SSH tunnel dengan `golang.org/x/crypto/ssh`.
-- **Frontend:** React + TypeScript, Monaco Editor untuk SQL editor, TanStack Table dengan virtualisasi untuk grid.
+- **Frontend:** React + TypeScript, CodeMirror 6 untuk SQL editor (lebih ringan daripada Monaco, sesuai target memori dan waktu mulai), TanStack Table dengan virtualisasi untuk grid.
 - **Penyimpanan lokal:** SQLite untuk daftar koneksi, riwayat, dan snippet; `go-keyring` untuk rahasia.
-- **Distribusi:** `.dmg` (notarized) untuk macOS dan installer yang ditandatangani untuk Windows; CI/CD lewat GitHub Actions.
+- **Distribusi:** `.dmg` untuk macOS dan installer NSIS untuk Windows; CI/CD lewat GitHub Actions. Karena dipakai internal, v1 tidak memakai sertifikat code signing berbayar: aplikasi macOS memakai ad-hoc signing tanpa notarization, dan installer Windows tidak ditandatangani.
+- **Pembaruan:** auto-update sejak v1 memakai updater bawaan Wails v3. Setiap rilis ditandatangani dengan kunci ed25519 milik sendiri dan diverifikasi aplikasi sebelum dipasang.
 
-Lapisan driver dibuat sebagai antarmuka (adapter) per engine supaya engine baru dapat ditambahkan tanpa mengubah UI.
+Lapisan driver dibuat sebagai antarmuka (adapter) per engine supaya engine baru dapat ditambahkan tanpa mengubah UI. Rincian arsitektur dan milestone ada di `PLAN.md`.
 
 ## 9. Alur Pengguna Utama
 
@@ -127,28 +134,29 @@ Lapisan driver dibuat sebagai antarmuka (adapter) per engine supaya engine baru 
 - Kredensial hanya tersimpan di keychain OS.
 - Koneksi Production memakai peringatan visual dan konfirmasi untuk operasi berisiko.
 - Opsi mode hanya-baca per koneksi.
-- Seluruh data dan riwayat query tersimpan lokal; tidak ada data yang dikirim ke server pihak ketiga.
+- Seluruh data dan riwayat query tersimpan lokal. Selain ke database dan server SSH milik pengguna, satu-satunya koneksi keluar adalah pemeriksaan pembaruan, yang hanya mengirim versi dan platform aplikasi dan bisa dimatikan.
+- Paket pembaruan hanya dipasang jika tanda tangannya cocok dengan kunci publik yang tertanam di aplikasi.
 - Dukungan SSL/TLS dan verifikasi sertifikat.
 
 ## 11. Metrik Keberhasilan
 
 - Waktu dari instalasi sampai koneksi pertama berhasil di bawah 3 menit.
 - Waktu mulai aplikasi di bawah 2 detik pada perangkat standar.
-- Tingkat crash kurang dari 1% sesi.
-- Pada tahap beta: minimal 50 pengguna aktif mingguan dengan skor kepuasan 4/5 atau lebih.
+- Tingkat crash kurang dari 1% sesi, dipantau dari log lokal (tanpa telemetri).
+- Querra menggantikan klien database sebelumnya untuk pekerjaan harian pemilik, dan rekan dekat yang mencobanya bisa terhubung ke database mereka tanpa bantuan.
 
 ## 12. Roadmap
 
 | Fase | Cakupan | Perkiraan |
 | --- | --- | --- |
 | Fase 0 | Riset kompetitor, prototipe UI, validasi stack Wails | 2 minggu |
-| Fase 1 | Koneksi, penjelajah skema, grid baca-saja (PostgreSQL) | 4 minggu |
-| Fase 2 | SQL editor, riwayat, keychain, SSH tunnel | 4 minggu |
+| Fase 1 | Koneksi, keychain, penjelajah skema, grid baca-saja (PostgreSQL) | 4 minggu |
+| Fase 2 | SQL editor, riwayat, SSH tunnel | 4 minggu |
 | Fase 3 | MySQL, edit inline, ekspor, mode gelap | 4 minggu |
-| Fase 4 | Impor CSV, SQLite, polishing, packaging dan signing | 3 minggu |
-| Beta | Uji tertutup, perbaikan bug, rilis publik | 3 minggu |
+| Fase 4 | Impor CSV, SQLite, polishing, packaging, auto-update | 3 minggu |
+| Beta | Uji internal bersama rekan dekat, perbaikan bug, rilis v1.0 internal | 3 minggu |
 
-Estimasi ini kasar dan perlu disesuaikan dengan jumlah developer dan waktu yang tersedia.
+Estimasi ini kasar; pengerjaannya solo dibantu Claude Code. Keychain dimajukan ke Fase 1 agar password tidak pernah tersimpan sebagai teks biasa.
 
 ## 13. Risiko dan Mitigasi
 
@@ -157,14 +165,26 @@ Estimasi ini kasar dan perlu disesuaikan dengan jumlah developer dan waktu yang 
 | Perbedaan perilaku webview antar OS | Tampilan atau performa tidak konsisten | Uji rutin di kedua OS sejak Fase 0; hindari fitur webview eksperimental |
 | Grid lambat pada data besar | Pengalaman buruk | Virtualisasi, paginasi sisi server, batas baris default |
 | Edit data merusak data produksi | Kehilangan data | Perubahan tertunda, konfirmasi, mode hanya-baca |
-| Proses code signing dan notarization | Rilis tertunda | Siapkan akun developer Apple dan sertifikat Windows lebih awal |
+| Aplikasi tanpa code signing berbayar | Peringatan Gatekeeper/SmartScreen saat pertama dibuka | Panduan instalasi untuk pemakai; pertimbangkan sertifikat berbayar bila distribusi diperluas |
+| Kunci penandatangan pembaruan bocor | Pembaruan palsu bisa terpasang | Kunci privat hanya di secret CI dan cadangan offline, tidak pernah di repositori |
 | Kompleksitas dukungan banyak engine | Jadwal molor | Mulai dari PostgreSQL, gunakan arsitektur adapter |
-| Kemiripan dengan produk lain | Masalah merek atau persepsi | Cek merek dagang, bangun identitas dan nilai tambah sendiri |
+| Kemiripan dengan produk lain | Masalah merek atau persepsi | Risiko rendah selama dipakai internal; cek merek dagang bila Querra akan didistribusikan luas |
 
-## 14. Pertanyaan Terbuka
+## 14. Keputusan atas Pertanyaan Terbuka
 
-- Model bisnis: gratis, open source, atau berbayar (lisensi per perangkat)?
-- Apakah ada kebutuhan dukungan SQL Server pada MVP?
-- Apakah nama "Querra" sudah aman dari sisi merek dagang dan ketersediaan domain?
-- Siapa target awal: komunitas developer umum, atau pengguna internal tertentu?
-- Perlukah fitur auto-update sejak versi pertama?
+| Pertanyaan | Keputusan (7 November 2026) |
+| --- | --- |
+| Model bisnis: gratis, open source, atau berbayar? | Untuk pemakaian pribadi, tidak diperdagangkan. Tidak ada sistem lisensi maupun lisensi open source. |
+| Perlukah dukungan SQL Server pada MVP? | Belum; dipertimbangkan setelah MVP. |
+| Apakah nama "Querra" aman dari sisi merek dagang dan domain? | Nama tetap Querra, sebagai alat yang dipakai usaha balikaryadigital.com. Karena tidak diperdagangkan, pemeriksaan merek dagang formal belum diperlukan. |
+| Siapa target awal? | Pemilik produk dan rekan dekat. |
+| Perlukah auto-update sejak versi pertama? | Ya, dengan rilis yang ditandatangani. |
+
+Keputusan teknis yang masih terbuka dicatat di `PLAN.md` §8.
+
+## 15. Riwayat Perubahan
+
+| Versi | Tanggal | Perubahan |
+| --- | --- | --- |
+| 0.1 | 7 November 2026 | Draft awal. |
+| 0.2 | 7 November 2026 | Pertanyaan terbuka dijawab; stack ditetapkan (Wails v3, CodeMirror 6 menggantikan Monaco); keychain dimajukan ke Fase 1; distribusi internal tanpa code signing berbayar; auto-update sejak v1; metrik dan roadmap disesuaikan untuk pemakaian internal. |
