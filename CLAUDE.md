@@ -30,6 +30,7 @@ go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 export PATH="$PATH:$(go env GOPATH)/bin"
 go env -w GOTOOLCHAIN=go1.26.2+auto  # go.mod's toolchain line is only a minimum; a newer local Go would win
 # Windows packaging needs NSIS: winget install NSIS.NSIS, then add "C:\Program Files (x86)\NSIS" to PATH
+# Windows db:* tasks run dev/testdb.sh with bash: add "C:\Program Files\Git\bin" to PATH (or run them from Git Bash)
 wails3 doctor
 
 wails3 dev                       # run the app with hot reload

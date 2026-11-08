@@ -266,10 +266,10 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id dan keybinding default.
   - i18n terpasang; semua string UI melewati `t()`.
   - Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
-- [ ] **M0.4 Identitas dan repositori** — *tinggal visibilitas repositori*
+- [x] **M0.4 Identitas dan repositori**
   - [x] Nama Querra dan bundle ID `com.balikaryadigital.querra` di `build/config.yml` (dikerjakan bersama M0.1).
   - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
-  - [ ] Repositori `cokagung30/querra` dibuat publik, jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1). *Per 8 November 2026 repositori masih **private**, sehingga aset rilis tidak bisa diunduh aplikasi tanpa token.*
+  - [x] Repositori `cokagung30/querra` dibuat publik (8 November 2026), jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
   - [x] Ikon aplikasi dari logo Querra (`build/icon-src/`): squircle navy untuk macOS (termasuk ikon Icon Composer macOS 26), logo transparan untuk Windows, serta ikon dan background DMG tanpa branding Wails.
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
