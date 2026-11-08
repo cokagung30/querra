@@ -20,11 +20,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $Exe = (Resolve-Path $Exe).Path
 $work = New-Item -ItemType Directory -Force -Path (Join-Path ([IO.Path]::GetTempPath()) "querra-perf-$PID")
+# Starts every report line; matches perf.ReportPrefix in internal/perf/report.go.
+$Prefix = 'PERF '
 
 function Get-PerfEvents([string]$Report) {
     if (-not (Test-Path $Report)) { return @() }
-    Get-Content $Report | Where-Object { $_.StartsWith('PERF ') } |
-        ForEach-Object { $_.Substring(6) | ConvertFrom-Json }
+    Get-Content $Report | Where-Object { $_.StartsWith($Prefix) } |
+        ForEach-Object { $_.Substring($Prefix.Length) | ConvertFrom-Json }
 }
 
 function Wait-PerfEvent([string]$Report, [string]$Name, [int]$TimeoutSeconds) {

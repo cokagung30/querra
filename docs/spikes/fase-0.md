@@ -17,7 +17,7 @@ Spike ini menjawab pertanyaan berisiko di PLAN M0.2 sebelum fitur sungguhan diba
 | Installer < 60 MB? | DMG universal 14 MB (`.app` 31 MB); installer NSIS 7,7 MB (`.exe` 16 MB) | ✅ |
 | `CancellablePromise` → ctx Go → query berhenti? | Ya. Butuh konfigurasi khusus agar sesi tetap hidup (§4.4) | ✅ dengan catatan |
 | `go-keyring` di macOS, termasuk prompt setelah build ulang? | Tidak ada prompt, tapi proses lain bisa ikut membaca (§4.5) | ⚠️ perlu keputusan |
-| Build tanpa tanda tangan dibuka di Mac/PC lain | Belum. Di Windows, Smart App Control ikut diuji (§5) | ⏳ manual |
+| Build tanpa tanda tangan dibuka di Mac/PC lain | Windows: installer langsung terbuka setelah UAC, tanpa SmartScreen dan tanpa blokir Smart App Control (§4.7). Mac lain belum | ✅ Windows, ⏳ Mac |
 | Tailwind v4 di macOS 12 (R3) | Belum. Butuh perangkat macOS 12 | ⏳ manual |
 
 **Gerbang keputusan:** di macOS dan Windows kedua pilihan stack terbukti cukup.
@@ -197,11 +197,28 @@ Temuan:
 
 **Installer:** NSIS 7,7 MB (`querra.exe` 16,1 MB), sudah termasuk bootstrapper WebView2 (1,8 MB) yang memasang runtime bila belum ada (R7).
 
+### 4.7 Installer Tanpa Tanda Tangan di Windows
+
+Diuji 8 November 2026 di PC Windows pada §2 (Smart App Control **aktif**, Defender real-time aktif). Installer NSIS disalin lalu diberi stream `Zone.Identifier` berisi `ZoneId=3`, sehingga Windows memperlakukannya sebagai file yang diunduh dari internet. File itu dibuka dengan klik dua kali di File Explorer.
+
+| Langkah | Hasil |
+| --- | --- |
+| SmartScreen ("Windows protected your PC") | Tidak muncul |
+| Smart App Control | Tidak memblokir; log Code Integrity tidak mencatat event apa pun |
+| UAC | Muncul (publisher tidak dikenal), lalu wizard NSIS terbuka |
+| `querra.exe` hasil instalasi | Berjalan normal |
+
+Temuan:
+
+- Di PC ini, pengguna hanya perlu menyetujui UAC. Ini lebih ringan daripada yang diperkirakan R10.
+- Penyebab SmartScreen dan Smart App Control tidak bereaksi belum diketahui. Hasilnya bisa berbeda di PC lain atau setelah Windows memperbarui reputasi file.
+- Unduhan lewat browser punya pemeriksaan tersendiri (SmartScreen di Edge atau Safe Browsing di Chrome, mis. peringatan "not commonly downloaded"). Ini baru bisa diuji dengan rilis GitHub sungguhan di M4.6, dan panduan instalasi (B.3) tetap perlu menjelaskan **Run anyway** untuk berjaga-jaga.
+
 ## 5. Belum Diuji
 
 | Item | Yang perlu dilakukan | Oleh |
 | --- | --- | --- |
-| Installer tanpa tanda tangan di Windows (SmartScreen dan Smart App Control) | Jalankan installer yang bertanda "diunduh dari internet" (unduhan sungguhan, atau salinan dengan stream `Zone.Identifier` berisi `ZoneId=3`). Catat apakah muncul SmartScreen dengan **Run anyway**, atau Smart App Control memblokir tanpa pilihan lanjut. Exe hasil build lokal tidak bertanda itu, jadi tidak memicu keduanya. PC Windows di §2 mengaktifkan Smart App Control | Pemilik/rekan |
+| Installer yang diunduh lewat browser di Windows | Unduh installer dari rilis GitHub sungguhan (M4.6) dengan Edge dan Chrome, lalu catat peringatan browser dan SmartScreen. Uji dengan salinan bertanda `ZoneId=3` sudah lolos (§4.7) | Pemilik/rekan |
 | DMG tanpa notarization di Mac lain (Gatekeeper → Open Anyway) | Kirim `bin/querra.dmg` lewat AirDrop atau unduhan supaya mendapat atribut karantina, lalu buka di Mac lain | Pemilik/rekan |
 | Tailwind v4 di macOS 12 (R3) | Buka aplikasi di macOS 12. Jika tidak ada perangkat, risiko diterima dan diuji saat Beta | Pemilik |
 
@@ -212,7 +229,7 @@ Temuan:
 - **PLAN §3.6:** catatan perilaku `go-keyring` di macOS dan keputusan backend keychain (di bawah).
 - **PLAN M1.7:** prefetch halaman searah scroll untuk mengurangi baris kosong saat scroll sangat cepat. Kalibrasi di Windows, karena `FetchRows` di sana ±3× lebih lambat.
 - **PLAN §6:** memori idle Windows (159 MB) dicek setiap milestone UI, dan peluncuran pertama setelah pembaruan di Windows (2,4–2,8 dtk) diukur lagi di M4.8.
-- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka. **R10:** di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan, dan ini belum diuji.
+- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka. **R10:** di PC uji, Smart App Control dan SmartScreen tidak memblokir installer tanpa tanda tangan (§4.7); peringatan browser saat mengunduh diuji di M4.6.
 
 ## 7. Keputusan untuk Pemilik
 
@@ -224,3 +241,28 @@ Temuan:
 | API Keychain native (cgo) | Proses lain memicu prompt | Prompt izin untuk setiap koneksi setelah **setiap** update |
 
 Alasannya: Querra dipakai pribadi dan oleh rekan dekat tanpa sertifikat berbayar, dan model ancaman "malware yang sudah berjalan sebagai user Anda" juga tidak dilindungi di Windows. Pilihan ini ditinjau ulang bila suatu saat memakai Developer ID (PLAN R10), karena dengan signature yang stabil, API native tidak lagi memunculkan prompt setelah update.
+
+## 8. Pengukuran Ulang Setelah M0.3 (Windows)
+
+*8 November 2026 · PC Windows pada §2 · `dev/perf/measure_windows.ps1` dengan mode autorun `PerfService`*
+
+M0.3 mengganti halaman spike dengan shell sungguhan (sidebar, tab, panel hasil, status bar, i18n) dan menghapus driver database serta keychain dari binary. Grid benchmark tetap memakai grid spike, kini sebagai overlay di atas shell dengan ukuran area yang sama.
+
+| Pengukuran | M0.2 (halaman spike, §4.6) | M0.3 (shell) |
+| --- | --- | --- |
+| Waktu mulai, median 5 kali | 599 ms | 706 ms |
+| Memori idle (total) | 159 MB | 130 MB |
+| Ukuran `querra.exe` / installer | 16,1 / 7,7 MB | 10,3 / 6,0 MB |
+| Grid `wheel-y` | 143 fps, p95 7,1 ms, 0 frame > 50 ms | 121 fps, p95 14 ms, 1 frame > 50 ms |
+| Grid `fling-y` | 56 fps, baris kosong ±69 % frame | 58 fps, baris kosong ±75 % frame |
+| Grid `wheel-x` | 143 fps | 141 fps |
+| `FetchRows` rata-rata / maks | 16 / 42 ms | 21 / 237 ms |
+| Memori 20 dtk setelah benchmark | 545 MB | 572 MB |
+
+Temuan:
+
+- Shell sungguhan menambah ±100 ms pada waktu mulai. Angkanya masih jauh di bawah target 2 detik.
+- Memori idle lebih rendah, tetapi jumlah memori proses WebView2 memang bervariasi antar-run (lihat juga §4.2 untuk macOS). Jangan menyimpulkan penghematan dari satu run.
+- `wheel-y` turun ke 121 fps dengan satu frame panjang, dan ada satu `FetchRows` lambat (237 ms). Ini hasil satu run, jadi bisa saja noise. Grid tetap lancar untuk target ±60 fps, dan angkanya diukur ulang dengan grid sungguhan di M1.7.
+- Binary mengecil karena pgx, driver MySQL, dan go-keyring ikut terhapus bersama spike. Ukurannya akan naik lagi di M1.1–M1.2.
+
