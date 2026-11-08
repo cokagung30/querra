@@ -204,7 +204,10 @@ tasks:
     cmds:
       # macOS icons sit on a squircle; Windows icons are the bare logo. An
       # empty filename skips that output (both default to a path otherwise).
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename "" -iconcomposerinput appicon.icon -macassetdir darwin
+      # The .icns is generated on macOS only: other platforms encode it
+      # differently, which would dirty the committed file on every build.
+      - cmd: wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename "" -iconcomposerinput appicon.icon -macassetdir darwin
+        platforms: [darwin]
       - wails3 generate icons -input icon-src/logo.png -windowsfilename windows/icon.ico -macfilename ""
 
   dev:frontend:

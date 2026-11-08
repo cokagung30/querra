@@ -28,6 +28,8 @@ Libraries are added by the milestone that first needs them, so not all of these 
 # one-time setup (keep the CLI version in sync with go.mod)
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 export PATH="$PATH:$(go env GOPATH)/bin"
+go env -w GOTOOLCHAIN=go1.26.2+auto  # go.mod's toolchain line is only a minimum; a newer local Go would win
+# Windows packaging needs NSIS: winget install NSIS.NSIS, then add "C:\Program Files (x86)\NSIS" to PATH
 wails3 doctor
 
 wails3 dev                       # run the app with hot reload
@@ -61,7 +63,7 @@ dev/perf/             startup/memory/grid measurement scripts (macOS Python, Win
 internal/spike/, frontend/src/features/spike/
                       M0.2 spike code. Temporary: delete in M0.3, but keep the autorun hooks dev/perf needs
 build/                Wails build config, icons, Info.plist, NSIS, signing
-.github/workflows/    CI on macOS + Windows: lint, test, build, stale generated-files check
+.github/workflows/    CI: test + build on macOS and Windows; lint + stale generated-files check on macOS only
 ```
 
 ## Architecture rules

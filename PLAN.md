@@ -249,27 +249,27 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Kerangka folder awal (`internal/app`, `frontend/src/{app,components/ui,lib}`); folder lain di §3.2 dibuat oleh milestone yang membutuhkannya. React 19, Tailwind v4 + shadcn/ui (Radix, preset Nova), ESLint + Prettier, Vitest, golangci-lint v2.
   - [x] Task tambahan di Taskfile: `test`, `test:integration`, `lint`, `db:reset`, `db:drop`, `bindings`.
   - [x] Database uji tanpa Docker (§5): `dev/testdb.sh` membuat dan mengisi `querra_test*` di server native yang dikonfigurasi lewat `dev/test.env`. Reset, seed, dan drop sudah dicoba di PostgreSQL 18.2 dan MySQL 8.0.45 lokal; MariaDB hanya diuji di CI.
-  - [ ] CI: lint, unit test Go dan frontend, build, dan cek binding di `macos-latest` dan `windows-latest`, plus job integrasi di `ubuntu-latest` dengan PostgreSQL 17, MySQL 8.4, dan MariaDB 11.4 (`.github/workflows/ci.yml`). *Belum hijau.*
+  - [x] CI: unit test Go dan frontend serta build di `macos-latest` dan `windows-latest` (lint dan cek file hasil generate hanya di macOS), plus job integrasi di `ubuntu-latest` dengan PostgreSQL 17, MySQL 8.4, dan MariaDB 11.4 (`.github/workflows/ci.yml`). *Hijau di ketiga push 7 November 2026, terakhir `50f8dba`.*
   - Selesai jika `wails3 dev` membuka jendela di macOS dan CI hijau di kedua OS.
-- [ ] **M0.2 Spike validasi stack** (hasil di `docs/spikes/fase-0.md`) — *macOS selesai; menunggu Windows dan uji manual*
+- [ ] **M0.2 Spike validasi stack** (hasil di `docs/spikes/fase-0.md`) — *pengukuran macOS dan Windows selesai; tinggal uji manual*
   - [x] Grid 100.000 baris × 20 kolom dari Go lewat `FetchRows` bertahap di WKWebView: ±75 fps (batas monitor) pada scroll normal.
-  - [ ] Grid yang sama di WebView2: jalankan workflow **Spike measurements** (`.github/workflows/spike.yml`).
-  - [x] Waktu mulai (median 330 ms), memori idle (76–138 MB), dan ukuran DMG universal (14 MB) di macOS. Angka Windows menyusul dari workflow yang sama.
+  - [x] Grid yang sama di WebView2 (PC Windows sungguhan, `dev/perf/measure_windows.ps1`): ±143 fps (batas monitor 144 Hz) pada scroll normal. `FetchRows` ±3× lebih lambat daripada di macOS, jadi prefetch M1.7 dikalibrasi di Windows.
+  - [x] Waktu mulai (median 330 ms), memori idle (76–138 MB), dan ukuran DMG universal (14 MB) di macOS. Windows: median 599 ms, idle 159 MB, installer NSIS 7,7 MB. Peluncuran pertama setelah build baru di Windows 2,4–2,8 dtk, hampir seluruhnya sebelum Go mulai (kemungkinan pemindaian Defender; laporan §4.6).
   - [x] Pembatalan: `CancellablePromise` → ctx Go → query berhenti, untuk PostgreSQL dan MySQL. Hasilnya mengoreksi §3.8.
   - [x] `go-keyring` di macOS: tidak ada prompt setelah build ulang ad-hoc, tapi proses lain bisa ikut membaca (keputusan di laporan §7). Windows memakai Credential Manager, yang teruji tidak langsung lewat build CI.
-  - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway). *Manual.*
+  - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway, termasuk dengan Smart App Control aktif). *Manual.*
   - [ ] Tampilan Tailwind v4 di macOS 12 (R3). *Manual, butuh perangkat macOS 12.*
-  - [x] **Gerbang keputusan (sementara, berdasarkan macOS):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3. Dibuka lagi bila WebView2 jauh di bawah target.
+  - [x] **Gerbang keputusan (final, macOS dan Windows):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3.
 - [ ] **M0.3 Shell UI dan fondasi desain**
   - Layout: sidebar, tab bar, area konten, panel hasil, status bar.
   - Token desain (terang/gelap), warna environment, font monospace untuk grid dan editor.
   - Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id dan keybinding default.
   - i18n terpasang; semua string UI melewati `t()`.
   - Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
-- [ ] **M0.4 Identitas dan repositori**
+- [ ] **M0.4 Identitas dan repositori** — *tinggal visibilitas repositori*
   - [x] Nama Querra dan bundle ID `com.balikaryadigital.querra` di `build/config.yml` (dikerjakan bersama M0.1).
   - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
-  - [x] Repositori `cokagung30/querra` dibuat publik, jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
+  - [ ] Repositori `cokagung30/querra` dibuat publik, jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1). *Per 8 November 2026 repositori masih **private**, sehingga aset rilis tidak bisa diunduh aplikasi tanpa token.*
   - [x] Ikon aplikasi dari logo Querra (`build/icon-src/`): squircle navy untuk macOS (termasuk ikon Icon Composer macOS 26), logo transparan untuk Windows, serta ikon dan background DMG tanpa branding Wails.
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
@@ -303,7 +303,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Sort per kolom (klik header). Filter per kolom (`=`, `≠`, `<`, `>`, `LIKE`, `IN`, `IS NULL`, `IS NOT NULL`) dikompilasi lewat Dialect dengan parameter. Tersedia juga input WHERE mentah.
   - Render berdasarkan `kind`; NULL dibedakan dari string kosong. Kolom bisa diubah lebarnya, sel atau baris bisa disalin (TSV), dan ada panel detail untuk nilai panjang atau JSON.
   - Jumlah baris berupa estimasi, dengan tombol untuk hitungan pasti.
-  - Prefetch halaman searah scroll, karena di spike M0.2 baris sempat kosong saat scroll sangat cepat. Pola dasar grid diambil dari `frontend/src/features/spike`: cache halaman LRU di luar React (`useSyncExternalStore`), TanStack Table hanya untuk model kolom, dan virtualisasi baris + kolom.
+  - Prefetch halaman searah scroll, karena di spike M0.2 baris sempat kosong saat scroll sangat cepat (±30–40 % frame di macOS, ±69 % di Windows). Kalibrasi jumlah prefetch di Windows. Pola dasar grid diambil dari `frontend/src/features/spike`: cache halaman LRU di luar React (`useSyncExternalStore`), TanStack Table hanya untuk model kolom, dan virtualisasi baris + kolom.
   - Selesai jika halaman pertama tabel 1 juta baris tampil < 1 detik (DB lokal) dan scroll lancar di kedua OS.
 - [ ] **M1.8 Tampilan struktur tabel**
   - Tab "Structure": kolom (tipe, nullable, default, komentar), PK, index, FK (bisa dinavigasi ke tabel tujuan), dan constraint lain.
@@ -438,7 +438,7 @@ Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1
 | Metrik | Target | Cara ukur | Kapan diukur |
 | --- | --- | --- | --- |
 | Waktu mulai | < 2 detik | Dari proses dimulai sampai shell UI interaktif (penanda waktu di frontend) | M0.2, M4.8 |
-| Memori idle | < 250 MB | Activity Monitor / Task Manager, **termasuk proses webview** | M0.2, M4.8 |
+| Memori idle | < 250 MB | Activity Monitor / Task Manager, **termasuk proses webview** | M0.2, setiap milestone UI di Windows (WebView2 sudah ±150 MB tanpa UI), M4.8 |
 | Scroll 100.000 baris | Tanpa patah-patah yang terlihat (~60 fps) | Panel Performance di DevTools webview | M0.2, M1.7, M4.8 |
 | Ukuran installer | < 60 MB | Ukuran `.dmg` dan installer Windows | M0.2, M4.6 |
 | Halaman pertama tabel 1 juta baris | < 1 detik (DB lokal) | Log durasi di Go | M1.7 |
@@ -455,8 +455,8 @@ Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1
 | R6 | Deteksi query destruktif kecolongan | Tokenizer *fail-safe*, uji kasus jebakan, dan mode hanya-baca sebagai lapis kedua |
 | R7 | Sebagian Windows 10 belum punya WebView2 | Bootstrapper WebView2 di installer |
 | R8 | Batas ukuran rahasia di Credential Manager | Simpan path private key, bukan isinya |
-| R9 | Waktu verifikasi di Windows terbatas karena pengembangan utama di macOS | VM atau mesin uji Windows, build CI di setiap push, checklist QA per fase |
-| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru | Diuji di M0.2; panduan instalasi (B.3); pertimbangkan Apple Developer Program bila pemakai bertambah |
+| R9 | Waktu verifikasi di Windows terbatas karena pengembangan utama di macOS | PC Windows 11 sungguhan tersedia sejak 8 November 2026 (dipakai untuk pengukuran M0.2), build CI di setiap push, checklist QA per fase |
+| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru. Di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan tanpa pilihan "Run anyway" | Diuji di M0.2; panduan instalasi (B.3); pertimbangkan Apple Developer Program atau sertifikat Windows bila pemakai bertambah atau Smart App Control memblokir |
 | R11 | Kunci privat updater bocor, sehingga pihak lain bisa menerbitkan pembaruan palsu | Kunci hanya di secret CI dan cadangan offline, tidak pernah di repositori |
 
 ## 8. Keputusan

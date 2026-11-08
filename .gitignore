@@ -3,6 +3,8 @@ bin/
 frontend/dist/
 .task/
 .wails/
+# Downloaded by the Windows NSIS packaging task
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 
 # Dependencies
 frontend/node_modules/

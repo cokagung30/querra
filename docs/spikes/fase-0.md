@@ -1,35 +1,37 @@
 # Spike Fase 0 (M0.2): Validasi Stack
 
-*Diukur 7 November 2026 · build `0.1.0-dev` · Wails v3.1.0 · TanStack Table 9.3 + TanStack Virtual 3.14 · CodeMirror 6*
+*Diukur 7 November 2026 (macOS) dan 8 November 2026 (Windows) · build `0.1.0-dev` · Wails v3.1.0 · TanStack Table 9.3 + TanStack Virtual 3.14 · CodeMirror 6*
 
 Spike ini menjawab pertanyaan berisiko di PLAN M0.2 sebelum fitur sungguhan dibangun. Kodenya sementara (`internal/spike`, `internal/app/spikeservice.go`, `frontend/src/features/spike`) dan dihapus di M0.3. Skrip pengukurannya (`dev/perf/`) tetap dipakai untuk M4.8.
 
 ## 1. Ringkasan
 
-| Pertanyaan M0.2 | Hasil (macOS) | Status |
+| Pertanyaan M0.2 | Hasil | Status |
 | --- | --- | --- |
 | Grid 100.000 × 20 lancar di WKWebView? | ±75 fps (batas refresh monitor) pada kecepatan scroll normal, p95 14–15 ms, tanpa frame panjang | ✅ |
-| Waktu mulai < 2 detik? | Median 330 ms; peluncuran pertama setelah build baru 0,8–1,3 dtk | ✅ |
-| Memori idle < 250 MB? | 76–138 MB (aplikasi + proses WebKit) | ✅ |
-| Installer < 60 MB? | DMG universal 14 MB (`.app` 31 MB) | ✅ |
+| Grid yang sama lancar di WebView2? | ±143 fps (batas monitor 144 Hz) pada kecepatan scroll normal, p95 7 ms, tanpa frame panjang. `FetchRows` ±3× lebih lambat daripada di macOS (§4.6) | ✅ |
+| Waktu mulai < 2 detik? | Median 330 ms (macOS) dan 599 ms (Windows). Peluncuran pertama setelah build baru: 0,8–1,3 dtk (macOS), 2,4–2,8 dtk (Windows, §4.6) | ✅, kecuali peluncuran pertama di Windows ⚠️ |
+| Memori idle < 250 MB? | 76–138 MB (macOS) dan 159 MB (Windows), termasuk proses webview | ✅ |
+| Installer < 60 MB? | DMG universal 14 MB (`.app` 31 MB); installer NSIS 7,7 MB (`.exe` 16 MB) | ✅ |
 | `CancellablePromise` → ctx Go → query berhenti? | Ya. Butuh konfigurasi khusus agar sesi tetap hidup (§4.4) | ✅ dengan catatan |
 | `go-keyring` di macOS, termasuk prompt setelah build ulang? | Tidak ada prompt, tapi proses lain bisa ikut membaca (§4.5) | ⚠️ perlu keputusan |
-| WebView2 (Windows) | Belum. Workflow `spike.yml` sudah siap dijalankan | ⏳ |
-| Build tanpa tanda tangan dibuka di Mac/PC lain | Belum. Butuh perangkat lain | ⏳ manual |
+| Build tanpa tanda tangan dibuka di Mac/PC lain | Belum. Di Windows, Smart App Control ikut diuji (§5) | ⏳ manual |
 | Tailwind v4 di macOS 12 (R3) | Belum. Butuh perangkat macOS 12 | ⏳ manual |
 
-**Gerbang keputusan:** di macOS kedua pilihan stack terbukti cukup.
+**Gerbang keputusan:** di macOS dan Windows kedua pilihan stack terbukti cukup.
 
 - **Grid:** lanjut dengan TanStack Table v9 (hanya untuk model kolom: ukuran dan resize) + TanStack Virtual (virtualisasi baris dan kolom). Tidak perlu pustaka grid lain.
 - **Desktop shell:** lanjut dengan Wails v3. Pembatalan, binding bertipe, dan event bertipe bekerja sesuai dokumentasi.
 
-Keputusan final menunggu hasil WebView2 dari workflow Windows. Kalau grid di sana jauh di bawah target, keputusan grid dibuka lagi.
+Hasil WebView2 (§4.6) mengonfirmasi keputusan ini, jadi gerbang keputusan ditutup.
 
 ## 2. Lingkungan Uji
 
-- Apple M4, RAM 16 GB, macOS 26.6.2, monitor eksternal 1920 × 1080. Median frame 13,3 ms, artinya monitor ini 75 Hz dan fps tidak bisa melebihi ±75.
+- **macOS:** Apple M4, RAM 16 GB, macOS 26.6.2, monitor eksternal 1920 × 1080. Median frame 13,3 ms, artinya monitor ini 75 Hz dan fps tidak bisa melebihi ±75.
 - Build produksi (`wails3 task package`, ad-hoc signed) dijalankan langsung dari `bin/querra.app/Contents/MacOS/querra`.
 - Database: PostgreSQL 18.2 dan MySQL 8.0.45 lokal (PhpWebStudy), database `querra_test` dari `wails3 task db:reset`.
+- **Windows:** laptop AMD Ryzen 7 170 (Radeon 680M terintegrasi, plus NVIDIA RTX 3050 Laptop), RAM 16 GB, Windows 11 Home build 26300, WebView2 Runtime 157.0.4341.42, layar 1920 × 1080 144 Hz. Median frame 7 ms, artinya fps tidak bisa melebihi ±144. Microsoft Defender (real-time) dan Smart App Control aktif.
+- Build produksi (`wails3 task package`, tanpa tanda tangan) dijalankan langsung dari `bin/querra.exe`. Pengukuran Windows tidak memakai database.
 
 ## 3. Cara Mengulang
 
@@ -39,7 +41,14 @@ python3 -I dev/perf/measure_macos.py bin/querra.app   # semua pengukuran, output
 ONLY=cancel python3 -I dev/perf/measure_macos.py      # satu bagian saja
 ```
 
-Windows: buka tab **Actions → Spike measurements → Run workflow** di GitHub. Hasilnya muncul di ringkasan job dan sebagai artefak `spike-windows`. Runner GitHub tidak punya GPU, sehingga fps di sana adalah batas bawah.
+Windows (Windows PowerShell 5.1 atau pwsh 7):
+
+```powershell
+wails3 task package                                    # build produksi + installer NSIS
+.\dev\perf\measure_windows.ps1 -Exe bin/querra.exe     # startup, idle, dan grid; output JSON
+```
+
+Workflow **Spike measurements** (**Actions → Spike measurements → Run workflow**) menjalankan skrip yang sama di runner GitHub. Runner itu tidak punya GPU, sehingga fps di sana hanya batas bawah; angka di §4.6 berasal dari PC sungguhan.
 
 ## 4. Hasil
 
@@ -131,13 +140,66 @@ Di macOS, `go-keyring` tidak memakai API Keychain native. Library ini menjalanka
 
 Alternatifnya, API Keychain native via cgo (misalnya `github.com/keybase/go-keychain`) mengikat item ke signature aplikasi. Tanpa Developer ID, signature berubah setiap pembaruan, sehingga macOS meminta izin ulang untuk **setiap** item setelah update. Alternatif ini tidak diuji di spike.
 
+### 4.6 Windows (WebView2)
+
+Diukur dengan `dev/perf/measure_windows.ps1` di PC Windows pada §2. Memori di Windows adalah *private working set* (kolom Memory di Task Manager), dijumlahkan untuk `querra.exe` dan semua proses `msedgewebview2.exe` turunannya. Angkanya tidak persis sama dengan `footprint` di macOS, tapi keduanya adalah angka yang dilihat pengguna, jadi sama-sama berlaku untuk anggaran PRD.
+
+**Waktu mulai**
+
+| Pengukuran | Hasil |
+| --- | --- |
+| Median 5 kali peluncuran | 599 ms (peluncuran ke-2 sampai ke-5: 561–652 ms) |
+| Peluncuran pertama build baru | 2.833 ms. Diulang dengan salinan exe ber-hash baru: 2.355 ms |
+| Bagian sebelum Go mulai, peluncuran pertama exe baru | ±1,8–2,1 dtk |
+| Bagian sebelum Go mulai, peluncuran berikutnya | ±65–95 ms |
+
+Temuan:
+
+- Peluncuran biasa jauh di bawah target 2 detik.
+- **Peluncuran pertama setelah build baru melebihi 2 detik**, dan hampir seluruh selisihnya terjadi sebelum kode Go berjalan. Pola ini (hanya pada exe dengan hash baru, sebelum `main()`) cocok dengan pemindaian real-time Microsoft Defender terhadap exe baru tanpa tanda tangan. Penyebab itu belum dibuktikan, karena Defender tidak dimatikan untuk uji ini. Pengguna mengalaminya sekali setelah setiap instalasi atau pembaruan, setara dengan verifikasi signature di macOS.
+- Pada salinan exe tadi, peluncuran kedua juga butuh 2,4 dtk, tapi kali ini di dalam proses Go (2.345 ms sejak Go mulai). Penyebabnya belum diketahui, dan peluncuran ketiga kembali normal (706 ms). Perlu diamati lagi di M4.8 dengan shell UI sungguhan.
+
+**Memori**
+
+| Kondisi | Total | Aplikasi (Go) | WebView2 (6 proses) |
+| --- | --- | --- | --- |
+| Idle 10 dtk setelah mulai | 159 MB | 9 MB | 151 MB |
+| Dataset 100k × 20 dimuat di Go | 331 MB | 118 MB | 213 MB |
+| Tepat setelah benchmark scroll (199× `FetchRows`) | 742 MB | 221 MB | 522 MB |
+| 20 dtk setelah benchmark | 545 MB | 221 MB | 325 MB |
+
+Temuan:
+
+- Target idle tercapai, tapi sisa ruangnya lebih kecil daripada di macOS: proses WebView2 sendiri sudah ±150 MB sebelum ada UI sungguhan. Shell UI (M0.3), CodeMirror, dan grid akan menambah memori renderer, jadi anggaran 250 MB perlu dicek di Windows setiap kali milestone UI selesai, bukan hanya di M4.8.
+- Satu proses renderer naik ke ±360 MB saat scroll sangat cepat, lalu turun ke ±170 MB dalam 20 dtk. Polanya sama dengan WebContent di macOS.
+
+**Grid**
+
+| Fase | fps rata-rata | p95 frame | p99 frame | Frame > 50 ms | Frame dengan baris kosong |
+| --- | --- | --- | --- | --- | --- |
+| `wheel-y` | 143 | 7,1 ms | 7,2 ms | 0 | 4 dari 1.148 |
+| `fling-y` | 56 | 42 ms | 56 ms | 11 | 390 dari 564 (±69 %) |
+| `wheel-x` | 143 | 7,2 ms | 7,4 ms | 0 | 0 |
+
+| `FetchRows` (500 baris × 20 kolom) | Windows | macOS (§4.3) |
+| --- | --- | --- |
+| Rata-rata | 16 ms | 4,3–5,4 ms |
+| p95 | 27 ms | 10–13 ms |
+| Maksimum | 42 ms | 16–22 ms |
+
+Temuan:
+
+- Pada kecepatan scroll manusia, vertikal maupun horizontal, grid berjalan di batas refresh monitor 144 Hz tanpa frame panjang.
+- **`FetchRows` ±3× lebih lambat daripada di macOS.** Data yang sama sudah ada di memori Go, jadi selisihnya berasal dari jembatan Wails di WebView2, dari CPU yang berbeda, atau dari keduanya. Keduanya belum dipisahkan.
+- Akibatnya, pada `fling-y` baris kosong naik menjadi ±69 % frame (macOS ±30–40 %). Ini memperkuat kebutuhan prefetch searah scroll di M1.7, dan jumlah halaman yang di-prefetch sebaiknya dikalibrasi di Windows. Keputusan grid tidak perlu dibuka lagi, karena hanya kasus ekstrem yang terpengaruh.
+
+**Installer:** NSIS 7,7 MB (`querra.exe` 16,1 MB), sudah termasuk bootstrapper WebView2 (1,8 MB) yang memasang runtime bila belum ada (R7).
+
 ## 5. Belum Diuji
 
 | Item | Yang perlu dilakukan | Oleh |
 | --- | --- | --- |
-| Grid, waktu mulai, memori, dan ukuran installer di WebView2 | Jalankan workflow **Spike measurements** di GitHub Actions, lalu tempel ringkasannya ke dokumen ini | Pemilik (memicu workflow) |
-| Grid di Windows dengan GPU sungguhan | Jalankan `dev/perf/measure_windows.ps1` di PC Windows, atau cukup coba scroll grid secara manual | Pemilik/rekan |
-| Installer tanpa tanda tangan di Windows (SmartScreen → Run anyway) | Unduh installer dari artefak workflow, lalu pasang di PC Windows | Pemilik/rekan |
+| Installer tanpa tanda tangan di Windows (SmartScreen dan Smart App Control) | Jalankan installer yang bertanda "diunduh dari internet" (unduhan sungguhan, atau salinan dengan stream `Zone.Identifier` berisi `ZoneId=3`). Catat apakah muncul SmartScreen dengan **Run anyway**, atau Smart App Control memblokir tanpa pilihan lanjut. Exe hasil build lokal tidak bertanda itu, jadi tidak memicu keduanya. PC Windows di §2 mengaktifkan Smart App Control | Pemilik/rekan |
 | DMG tanpa notarization di Mac lain (Gatekeeper → Open Anyway) | Kirim `bin/querra.dmg` lewat AirDrop atau unduhan supaya mendapat atribut karantina, lalu buka di Mac lain | Pemilik/rekan |
 | Tailwind v4 di macOS 12 (R3) | Buka aplikasi di macOS 12. Jika tidak ada perangkat, risiko diterima dan diuji saat Beta | Pemilik |
 
@@ -146,8 +208,9 @@ Alternatifnya, API Keychain native via cgo (misalnya `github.com/keybase/go-keyc
 - **PLAN §3.8:** konfigurasi pembatalan PostgreSQL dikoreksi (`CancelRequestContextWatcherHandler`), dan `KILL QUERY` untuk MySQL ditandai sudah tervalidasi.
 - **PLAN §3.4:** catatan penyimpanan buffer hasil yang ringkas untuk M2.2.
 - **PLAN §3.6:** catatan perilaku `go-keyring` di macOS dan keputusan backend keychain (di bawah).
-- **PLAN M1.7:** prefetch halaman searah scroll untuk mengurangi baris kosong saat scroll sangat cepat.
-- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka.
+- **PLAN M1.7:** prefetch halaman searah scroll untuk mengurangi baris kosong saat scroll sangat cepat. Kalibrasi di Windows, karena `FetchRows` di sana ±3× lebih lambat.
+- **PLAN §6:** memori idle Windows (159 MB) dicek setiap milestone UI, dan peluncuran pertama setelah pembaruan di Windows (2,4–2,8 dtk) diukur lagi di M4.8.
+- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka. **R10:** di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan, dan ini belum diuji.
 
 ## 7. Keputusan untuk Pemilik
 
