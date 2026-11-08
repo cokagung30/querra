@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useMemo, useSyncExternalStore, type RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { DatasetInfo } from './api'
 import type { Row, RowPageCache } from './pageCache'
@@ -15,18 +16,21 @@ const ROW_HEIGHT = 26
 const HEADER_HEIGHT = 30
 const NO_ROWS: Row[] = []
 
-// TanStack Table only supplies the column model (sizes, resizing) here: rows
-// live in Go and arrive page by page through the cache.
+// The M0.2 spike grid, kept as the dev/perf benchmark target until the real
+// grid lands in M1.7. TanStack Table only supplies the column model (sizes,
+// resizing) here: rows live in Go and arrive page by page through the cache.
 const features = tableFeatures({ columnSizingFeature, columnResizingFeature })
 const columnHelper = createColumnHelper<typeof features, Row>()
 
-interface SpikeGridProps {
+interface PerfGridProps {
   dataset: DatasetInfo
   cache: RowPageCache
   scrollRef: RefObject<HTMLDivElement | null>
 }
 
-export function SpikeGrid({ dataset, cache, scrollRef }: SpikeGridProps) {
+export function PerfGrid({ dataset, cache, scrollRef }: PerfGridProps) {
+  const { t } = useTranslation()
+  const nullLabel = t('grid.null')
   useSyncExternalStore(cache.subscribe, cache.getVersion)
 
   const columns = useMemo(
@@ -127,7 +131,7 @@ export function SpikeGrid({ dataset, cache, scrollRef }: SpikeGridProps) {
                       lineHeight: `${ROW_HEIGHT}px`,
                     }}
                   >
-                    <Cell value={row[virtualColumn.index]} />
+                    <Cell value={row[virtualColumn.index]} nullLabel={nullLabel} />
                   </div>
                 ))}
             </div>
@@ -138,7 +142,7 @@ export function SpikeGrid({ dataset, cache, scrollRef }: SpikeGridProps) {
   )
 }
 
-function Cell({ value }: { value: string | null | undefined }) {
-  if (value == null) return <span className="text-muted-foreground italic">NULL</span>
+function Cell({ value, nullLabel }: { value: string | null | undefined; nullLabel: string }) {
+  if (value == null) return <span className="text-muted-foreground italic">{nullLabel}</span>
   return value
 }

@@ -1,7 +1,7 @@
-name: Spike measurements
+name: Perf measurements
 
-# Manual only (Actions → Spike measurements → Run workflow). Builds the Windows
-# app and NSIS installer, then runs the M0.2 measurements in
+# Manual only (Actions → Perf measurements → Run workflow). Builds the Windows
+# app and NSIS installer, then runs the startup, memory and grid measurements in
 # dev/perf/measure_windows.ps1. GitHub's Windows runners are VMs without a GPU,
 # so WebView2 renders in software: treat frame rates as a pessimistic lower
 # bound, and startup and memory as indicative.
@@ -54,11 +54,11 @@ jobs:
             --disable-background-timer-throttling
         run: |
           $json = ./dev/perf/measure_windows.ps1 -Exe bin/querra.exe
-          $json | Set-Content spike-windows.json
-          "## Windows spike measurements`n" + '```json' + "`n$json`n" + '```' |
+          $json | Set-Content perf-windows.json
+          "## Windows perf measurements`n" + '```json' + "`n$json`n" + '```' |
             Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         with:
-          name: spike-windows
-          path: spike-windows.json
+          name: perf-windows
+          path: perf-windows.json

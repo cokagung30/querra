@@ -4,6 +4,8 @@
 
 Spike ini menjawab pertanyaan berisiko di PLAN M0.2 sebelum fitur sungguhan dibangun. Kodenya sementara (`internal/spike`, `internal/app/spikeservice.go`, `frontend/src/features/spike`) dan dihapus di M0.3. Skrip pengukurannya (`dev/perf/`) tetap dipakai untuk M4.8.
 
+> **Sejak M0.3:** kode spike sudah dihapus. Probe pembatalan dan keychain hanya ada di riwayat git (commit `e08c486`). Mode autorun startup, idle, dan grid pindah ke `PerfService` (`internal/app/perfservice.go`), dengan variabel `QUERRA_PERF_*` menggantikan `QUERRA_SPIKE_*`. Perintah di §3 tetap berlaku, kecuali pengukuran `cancel`.
+
 ## 1. Ringkasan
 
 | Pertanyaan M0.2 | Hasil | Status |
@@ -38,7 +40,7 @@ Hasil WebView2 (§4.6) mengonfirmasi keputusan ini, jadi gerbang keputusan ditut
 ```bash
 wails3 task package                                   # build produksi
 python3 -I dev/perf/measure_macos.py bin/querra.app   # semua pengukuran, output JSON
-ONLY=cancel python3 -I dev/perf/measure_macos.py      # satu bagian saja
+ONLY=grid python3 -I dev/perf/measure_macos.py        # satu bagian saja
 ```
 
 Windows (Windows PowerShell 5.1 atau pwsh 7):
@@ -48,7 +50,7 @@ wails3 task package                                    # build produksi + instal
 .\dev\perf\measure_windows.ps1 -Exe bin/querra.exe     # startup, idle, dan grid; output JSON
 ```
 
-Workflow **Spike measurements** (**Actions → Spike measurements → Run workflow**) menjalankan skrip yang sama di runner GitHub. Runner itu tidak punya GPU, sehingga fps di sana hanya batas bawah; angka di §4.6 berasal dari PC sungguhan.
+Workflow **Perf measurements** (**Actions → Perf measurements → Run workflow**; dulu bernama Spike measurements) menjalankan skrip yang sama di runner GitHub. Runner itu tidak punya GPU, sehingga fps di sana hanya batas bawah; angka di §4.6 berasal dari PC sungguhan.
 
 ## 4. Hasil
 

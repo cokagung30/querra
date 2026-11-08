@@ -2,12 +2,34 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Design tokens. Colors are CSS variables defined for :root (light) and .dark,
+ * which src/app/theme.ts toggles from the OS appearance. Components use the
+ * Tailwind names (bg-background, text-env-production, …), never raw colors.
+ *
+ * Environment colors (PLAN §3.7): env-local, env-staging, env-production, each
+ * with a -foreground for text on top. Anywhere a connection appears, a
+ * Production connection must carry env-production.
+ *
+ * The monospace font (font-mono) is for the grid and the SQL editor.
+ */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans:
+    'Geist Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:
+    'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --color-env-local: var(--env-local);
+  --color-env-local-foreground: var(--env-local-foreground);
+  --color-env-staging: var(--env-staging);
+  --color-env-staging-foreground: var(--env-staging-foreground);
+  --color-env-production: var(--env-production);
+  --color-env-production-foreground: var(--env-production-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -81,9 +103,17 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --env-local: oklch(0.55 0.13 155);
+  --env-local-foreground: oklch(0.985 0 0);
+  --env-staging: oklch(0.75 0.16 75);
+  --env-staging-foreground: oklch(0.205 0 0);
+  --env-production: oklch(0.55 0.22 27);
+  --env-production-foreground: oklch(0.985 0 0);
+  color-scheme: light;
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -115,6 +145,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --env-local: oklch(0.6 0.13 155);
+  --env-local-foreground: oklch(0.985 0 0);
+  --env-staging: oklch(0.78 0.15 75);
+  --env-staging-foreground: oklch(0.205 0 0);
+  --env-production: oklch(0.62 0.21 25);
+  --env-production-foreground: oklch(0.985 0 0);
 }
 
 @layer base {
@@ -123,6 +159,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* A desktop app: no rubber-band scrolling of the whole window. */
+    overscroll-behavior: none;
   }
   html {
     @apply font-sans;

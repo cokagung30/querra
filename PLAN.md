@@ -94,13 +94,14 @@ querra/
 │   ├── importer/            # impor CSV (pratinjau, pemetaan, batch insert)
 │   ├── store/               # SQLite lokal + migrations/ (embed)
 │   ├── secrets/             # interface Store + implementasi keyring + fake in-memory
-│   └── settings/
+│   ├── settings/
+│   └── perf/                # dataset + reporter untuk pengukuran dev/perf (§6)
 ├── frontend/
 │   ├── bindings/            # HASIL GENERATE — jangan diedit
 │   └── src/
 │       ├── app/             # shell: layout, manajemen tab, provider
 │       ├── features/        # connections, explorer, grid, editor, results, history,
-│       │                    # changes, export, import, settings
+│       │                    # changes, export, import, settings, perf (benchmark §6)
 │       ├── components/ui/   # komponen shadcn/ui
 │       ├── lib/             # registry perintah/shortcut, format sel, util
 │       ├── stores/          # Zustand store lintas fitur
@@ -260,12 +261,13 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway, termasuk dengan Smart App Control aktif). *Manual.*
   - [ ] Tampilan Tailwind v4 di macOS 12 (R3). *Manual, butuh perangkat macOS 12.*
   - [x] **Gerbang keputusan (final, macOS dan Windows):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3.
-- [ ] **M0.3 Shell UI dan fondasi desain**
-  - Layout: sidebar, tab bar, area konten, panel hasil, status bar.
-  - Token desain (terang/gelap), warna environment, font monospace untuk grid dan editor.
-  - Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id dan keybinding default.
-  - i18n terpasang; semua string UI melewati `t()`.
-  - Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
+- [ ] **M0.3 Shell UI dan fondasi desain** — *selesai di Windows; menunggu uji manual di macOS (menu native dan shortcut Cmd) dan pengukuran §6 dengan shell baru*
+  - [x] Layout: sidebar, tab bar, area konten, panel hasil, status bar (`frontend/src/app/AppShell.tsx`, `react-resizable-panels` v4). Sidebar dan panel hasil bisa disembunyikan lewat perintah atau dengan menggeser pembatasnya. Ukuran panel diingat di localStorage webview (`lib/storage.ts`); pengaturan penting tetap di store Go (§3.6). Tab query masih placeholder sampai editor M2.3.
+  - [x] Token desain terang/gelap (tema mengikuti sistem lewat `app/theme.ts`; pilihan manual di M3.5), warna environment `env-local`, `env-staging`, `env-production` di `index.css`, serta font monospace Geist Mono (`font-mono`) untuk grid dan editor.
+  - [x] Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id, judul i18n, dan keybinding default (`Mod` = Cmd di macOS, Ctrl di Windows). Hanya ada satu listener keydown (`installKeybindings`). Override per id dan deteksi bentrok sudah ada; penyimpanan override menyusul di M4.5. macOS memakai menu native sendiri (`internal/app/menu.go`: App, Edit, Window), karena menu bawaan Wails mengambil Cmd+W (tutup jendela) dan Cmd+R (reload webview, yang membuang tab dan perubahan tertunda).
+  - [x] i18n terpasang (`i18next` + `react-i18next`, `src/i18n/en.json`); semua string UI melewati `t()`, dan key-nya dicek TypeScript (`src/i18n/i18next.d.ts`).
+  - [x] Catatan riset singkat tentang pola UX klien database populer di `docs/research.md` (PRD Fase 0).
+  - [x] Kode spike M0.2 dihapus. Mode autorun startup, idle, dan grid untuk `dev/perf` pindah ke `internal/perf`, `internal/app/perfservice.go`, dan `frontend/src/features/perf` (variabel `QUERRA_PERF_*`). Probe pembatalan dan keychain hanya tersisa di riwayat git (commit `e08c486`).
 - [x] **M0.4 Identitas dan repositori**
   - [x] Nama Querra dan bundle ID `com.balikaryadigital.querra` di `build/config.yml` (dikerjakan bersama M0.1).
   - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
@@ -303,7 +305,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Sort per kolom (klik header). Filter per kolom (`=`, `≠`, `<`, `>`, `LIKE`, `IN`, `IS NULL`, `IS NOT NULL`) dikompilasi lewat Dialect dengan parameter. Tersedia juga input WHERE mentah.
   - Render berdasarkan `kind`; NULL dibedakan dari string kosong. Kolom bisa diubah lebarnya, sel atau baris bisa disalin (TSV), dan ada panel detail untuk nilai panjang atau JSON.
   - Jumlah baris berupa estimasi, dengan tombol untuk hitungan pasti.
-  - Prefetch halaman searah scroll, karena di spike M0.2 baris sempat kosong saat scroll sangat cepat (±30–40 % frame di macOS, ±69 % di Windows). Kalibrasi jumlah prefetch di Windows. Pola dasar grid diambil dari `frontend/src/features/spike`: cache halaman LRU di luar React (`useSyncExternalStore`), TanStack Table hanya untuk model kolom, dan virtualisasi baris + kolom.
+  - Prefetch halaman searah scroll, karena di spike M0.2 baris sempat kosong saat scroll sangat cepat (±30–40 % frame di macOS, ±69 % di Windows). Kalibrasi jumlah prefetch di Windows. Pola dasar grid diambil dari grid benchmark di `frontend/src/features/perf` (`PerfGrid.tsx`, `pageCache.ts`): cache halaman LRU di luar React (`useSyncExternalStore`), TanStack Table hanya untuk model kolom, dan virtualisasi baris + kolom.
   - Selesai jika halaman pertama tabel 1 juta baris tampil < 1 detik (DB lokal) dan scroll lancar di kedua OS.
 - [ ] **M1.8 Tampilan struktur tabel**
   - Tab "Structure": kolom (tipe, nullable, default, komentar), PK, index, FK (bisa dinavigasi ke tabel tujuan), dan constraint lain.
@@ -433,7 +435,7 @@ Data seed di `dev/seed/`:
 
 ## 6. Anggaran Performa
 
-Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1` (Windows, juga dijalankan oleh workflow **Spike measurements**). Keduanya memakai mode autorun dari spike M0.2. Saat kode spike dihapus di M0.3, mode autorun untuk startup, idle, dan grid harus dipertahankan dalam bentuk lain supaya pengukuran M4.8 tetap bisa dijalankan. Hasil pertama ada di `docs/spikes/fase-0.md`.
+Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1` (Windows, juga dijalankan oleh workflow **Perf measurements**). Keduanya menjalankan mode autorun `PerfService` (`QUERRA_PERF_AUTORUN` = `startup`, `idle`, atau `grid`; lihat `internal/app/perfservice.go`). Tanpa variabel itu `PerfService` tidak melakukan apa pun, sehingga build rilis bisa diukur langsung. Grid benchmark masih memakai grid spike sampai grid sungguhan selesai di M1.7. Hasil pertama ada di `docs/spikes/fase-0.md`.
 
 | Metrik | Target | Cara ukur | Kapan diukur |
 | --- | --- | --- | --- |

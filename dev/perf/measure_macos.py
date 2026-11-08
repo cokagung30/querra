@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Measures Querra's startup time, memory and grid scrolling on macOS.
 
-Drives the M0.2 spike's autorun modes (QUERRA_SPIKE_AUTORUN, see
-internal/app/spikeservice.go). Build and package the app first:
+Drives PerfService's autorun modes (QUERRA_PERF_AUTORUN, see
+internal/app/perfservice.go). Build and package the app first:
 
     wails3 task package
     python3 -I dev/perf/measure_macos.py [bin/querra.app]
 
-The cancellation test needs the querra_test databases (`wails3 task db:reset`).
-Set ONLY to a comma-separated list (startup, idleMemory, grid, cancel) to run
-just those measurements.
+Set ONLY to a comma-separated list (startup, idleMemory, grid) to run just
+those measurements.
 Prints a JSON summary to stdout. The app window opens several times while this
 runs; leave it in front so macOS doesn't throttle its animation frames.
 """
@@ -31,7 +30,7 @@ BIN = APP / "Contents" / "MacOS" / "querra"
 RUNS = int(os.environ.get("RUNS", "5"))
 IDLE_SECONDS = 10
 SETTLE_SECONDS = 20
-PREFIX = "SPIKE "
+PREFIX = "PERF "
 
 # Helper processes WKWebView starts on behalf of an app. They are children of
 # launchd, so they are found by diffing the process list around each launch.
@@ -63,7 +62,7 @@ def memory(pids: list[int]) -> dict:
 
 
 def launch(mode: str, report: Path, **env: str) -> subprocess.Popen:
-    full_env = {**os.environ, "QUERRA_SPIKE_AUTORUN": mode, "QUERRA_SPIKE_REPORT": str(report), **env}
+    full_env = {**os.environ, "QUERRA_PERF_AUTORUN": mode, "QUERRA_PERF_REPORT": str(report), **env}
     return subprocess.Popen(
         [str(BIN)], env=full_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -124,7 +123,7 @@ def measure_grid(work: Path) -> dict:
     benchmark, right after it, and after letting garbage collection settle."""
     report = work / "grid.jsonl"
     before = webkit_pids()
-    proc = launch("grid", report, QUERRA_SPIKE_LINGER_MS=str((SETTLE_SECONDS + 10) * 1000))
+    proc = launch("grid", report, QUERRA_PERF_LINGER_MS=str((SETTLE_SECONDS + 10) * 1000))
     try:
         wait_for(report, "grid-loaded", 120)
         pids = [proc.pid, *sorted(webkit_pids() - before)]
@@ -148,13 +147,6 @@ def measure_grid(work: Path) -> dict:
     }
 
 
-def measure_cancel(work: Path) -> list[dict]:
-    report = work / "cancel.jsonl"
-    proc = launch("cancel", report, QUERRA_SPIKE_LINGER_MS="0")
-    proc.wait(timeout=120)
-    return [e["result"] for e in events(report) if e["event"] == "cancel"]
-
-
 def sizes() -> dict:
     def mb(path: Path) -> float:
         out = subprocess.run(["du", "-sk", str(path)], capture_output=True, text=True).stdout
@@ -173,9 +165,8 @@ def main() -> None:
         "startup": measure_startup,
         "idleMemory": measure_idle,
         "grid": measure_grid,
-        "cancel": measure_cancel,
     }
-    # ONLY=startup,cancel runs a subset.
+    # ONLY=startup,grid runs a subset.
     only = {name for name in os.environ.get("ONLY", "").split(",") if name}
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)

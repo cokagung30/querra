@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as spike$0 from "../spike/models.js";
+import * as perf$0 from "../perf/models.js";
 
 /**
  * AppInfo describes the running application.
@@ -14,10 +14,10 @@ export interface AppInfo {
 }
 
 /**
- * DatasetInfo describes the generated spike dataset.
+ * DatasetInfo describes the generated benchmark dataset.
  */
 export interface DatasetInfo {
-    "columns": spike$0.Column[] | null;
+    "columns": perf$0.Column[] | null;
     "rowCount": number;
     "generateMs": number;
 }

@@ -1,4 +1,4 @@
-package spike
+package perf
 
 import (
 	"bytes"

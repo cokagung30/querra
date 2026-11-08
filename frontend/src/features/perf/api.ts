@@ -1,46 +1,30 @@
-// Backend calls for the M0.2 spike. Temporary: removed with internal/spike.
-import { Events } from '@wailsio/runtime'
-
-import { SpikeCancelResult } from '../../../bindings/events'
+// Backend calls for the dev/perf measurements (PerfService). They do nothing
+// unless the app was started with QUERRA_PERF_AUTORUN.
 import {
-  SpikeService,
+  PerfService,
   type DatasetInfo,
 } from '../../../bindings/github.com/cokagung30/querra/internal/app'
-import type {
-  CancelResult,
-  KeychainStep,
-  MemStats,
-} from '../../../bindings/github.com/cokagung30/querra/internal/spike'
 
 import type { Row } from './pageCache'
 
-export type { CancelResult, DatasetInfo, KeychainStep, MemStats }
+export type { DatasetInfo }
 
-export const autorunMode = () => SpikeService.AutorunMode()
-export const reportReady = () => SpikeService.ReportReady()
-export const openDataset = () => SpikeService.OpenDataset()
-export const memStats = () => SpikeService.MemStats()
-export const finish = () => SpikeService.Finish()
-export const keychainWrite = (value: string) => SpikeService.KeychainWrite(value)
-export const keychainRead = () => SpikeService.KeychainRead()
-export const keychainDelete = () => SpikeService.KeychainDelete()
+export type PerfMode = '' | 'startup' | 'idle' | 'grid'
+
+// ready reports the shell's first painted frame and returns the autorun mode,
+// or '' for normal use.
+export async function ready(): Promise<PerfMode> {
+  return (await PerfService.Ready()) as PerfMode
+}
+
+export const openDataset = () => PerfService.OpenDataset()
+export const finish = () => PerfService.Finish()
 
 export function report(event: string, data: Record<string, unknown>): Promise<void> {
-  return SpikeService.Report(event, data)
+  return PerfService.Report(event, data)
 }
 
 export async function fetchRows(offset: number, limit: number): Promise<Row[]> {
-  const rows = await SpikeService.FetchRows(offset, limit)
+  const rows = await PerfService.FetchRows(offset, limit)
   return (rows ?? []).map((row) => row ?? [])
-}
-
-// Starts a 30-second server-side sleep; cancel() the returned promise to test
-// cancellation. A cancelled promise discards its result, so the outcome
-// arrives through onCancelResult instead.
-export function sleepAndObserve(engine: string) {
-  return SpikeService.SleepAndObserve(engine)
-}
-
-export function onCancelResult(callback: (result: CancelResult) => void): () => void {
-  return Events.On(SpikeCancelResult, (event) => callback(event.data))
 }

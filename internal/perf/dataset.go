@@ -1,7 +1,8 @@
-// Package spike holds temporary code for the M0.2 stack validation (results in
-// docs/spikes/fase-0.md). It is deleted once the spike's decisions are made;
-// nothing outside internal/app may depend on it.
-package spike
+// Package perf supports the unattended startup, idle and grid measurements run
+// by dev/perf (PLAN §6). It is plain Go; internal/app exposes it to the
+// frontend through PerfService, which stays inert unless QUERRA_PERF_AUTORUN
+// is set.
+package perf
 
 import (
 	"fmt"

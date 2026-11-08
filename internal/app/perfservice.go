@@ -1,7 +1,7 @@
 package app
 
 import (
-	"context"
+	"log/slog"
 	"os"
 	"strconv"
 	"sync"
@@ -9,146 +9,139 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"github.com/cokagung30/querra/internal/spike"
+	"github.com/cokagung30/querra/internal/perf"
 )
 
-func init() {
-	application.RegisterEvent[spike.CancelResult]("spike:cancel-result")
-}
+// Autorun modes that dev/perf selects with QUERRA_PERF_AUTORUN.
+const (
+	perfModeStartup = "startup" // report the first painted screen, then quit
+	perfModeIdle    = "idle"    // report the first painted screen, then stay open
+	perfModeGrid    = "grid"    // scroll benchmark over a generated dataset
+)
 
 const (
-	spikeRows    = 100_000
-	spikeColumns = 20
+	perfRows    = 100_000
+	perfColumns = 20
+	// maxPerfFetchRows bounds one FetchRows window.
+	maxPerfFetchRows = 1000
 )
 
-// SpikeService exposes the M0.2 spike probes to the frontend. Temporary: it is
-// removed together with internal/spike.
-//
-// QUERRA_SPIKE_AUTORUN selects an unattended benchmark for the dev/perf
-// scripts ("startup", "idle", "grid", "cancel", "keychain-write",
-// "keychain-read"); empty means interactive use.
-type SpikeService struct {
+// PerfService drives the unattended measurements in dev/perf (PLAN §6): startup
+// time, idle memory, and a grid scroll benchmark. Without QUERRA_PERF_AUTORUN it
+// does nothing, so it is safe to ship in release builds, which is what dev/perf
+// measures.
+type PerfService struct {
 	processStart time.Time
 	autorun      string
-	report       *spike.Reporter
+	report       *perf.Reporter
 
 	mu      sync.Mutex
-	dataset *spike.Dataset
+	dataset *perf.Dataset
 }
 
-// DatasetInfo describes the generated spike dataset.
+// DatasetInfo describes the generated benchmark dataset.
 type DatasetInfo struct {
-	Columns    []spike.Column `json:"columns"`
-	RowCount   int            `json:"rowCount"`
-	GenerateMs int64          `json:"generateMs"`
+	Columns    []perf.Column `json:"columns"`
+	RowCount   int           `json:"rowCount"`
+	GenerateMs int64         `json:"generateMs"`
 }
 
-// NewSpikeService returns a SpikeService that measures startup from processStart.
-func NewSpikeService(processStart time.Time) *SpikeService {
-	return &SpikeService{
-		processStart: processStart,
-		autorun:      os.Getenv("QUERRA_SPIKE_AUTORUN"),
-		report:       spike.NewReporter(),
+// NewPerfService returns a PerfService that measures startup from processStart.
+func NewPerfService(processStart time.Time) *PerfService {
+	s := &PerfService{processStart: processStart}
+	switch mode := os.Getenv("QUERRA_PERF_AUTORUN"); mode {
+	case "":
+	case perfModeStartup, perfModeIdle, perfModeGrid:
+		s.autorun = mode
+		s.report = perf.NewReporter()
+	default:
+		slog.Warn("perf: unknown QUERRA_PERF_AUTORUN mode, ignoring it", "mode", mode)
 	}
+	return s
 }
 
-// AutorunMode returns the benchmark the frontend should run unattended, or ""
-// for interactive use.
-func (s *SpikeService) AutorunMode() string {
+func (s *PerfService) measuring() bool {
+	return s.autorun != ""
+}
+
+// Ready is called once the shell's first frame is painted. It returns the
+// autorun mode the frontend should run ("" for normal use). While measuring it
+// records the startup time, and in "startup" mode it then quits.
+func (s *PerfService) Ready() string {
+	if !s.measuring() {
+		return ""
+	}
+	s.report.Emit("ready", map[string]any{
+		"sinceProcessStartMs": time.Since(s.processStart).Milliseconds(),
+		"mem":                 perf.ReadMemStats(),
+	})
+	if s.autorun == perfModeStartup {
+		s.quitAfter(0)
+	}
 	return s.autorun
 }
 
-// ReportReady records how long the app took to show its first screen. In
-// "startup" mode it then quits.
-func (s *SpikeService) ReportReady() {
-	s.report.Emit("ready", map[string]any{
-		"sinceProcessStartMs": time.Since(s.processStart).Milliseconds(),
-		"mem":                 spike.ReadMemStats(),
-	})
-	if s.autorun == "startup" {
-		s.quitAfter(0)
+// OpenDataset generates the 100k×20 benchmark dataset on first use and
+// describes it. Outside "grid" mode it returns an empty dataset, so nothing
+// allocates it by accident.
+func (s *PerfService) OpenDataset() DatasetInfo {
+	if s.autorun != perfModeGrid {
+		return DatasetInfo{Columns: []perf.Column{}}
 	}
-}
-
-// OpenDataset generates the 100k×20 dataset on first use and describes it.
-func (s *SpikeService) OpenDataset() DatasetInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var generateMs int64
 	if s.dataset == nil {
 		start := time.Now()
-		s.dataset = spike.NewDataset(spikeRows, spikeColumns)
+		s.dataset = perf.NewDataset(perfRows, perfColumns)
 		generateMs = time.Since(start).Milliseconds()
 	}
 	return DatasetInfo{Columns: s.dataset.Columns, RowCount: s.dataset.RowCount(), GenerateMs: generateMs}
 }
 
-// FetchRows returns one window of the dataset; nil cells are NULL.
-func (s *SpikeService) FetchRows(offset, limit int) [][]*string {
+// FetchRows returns one window of at most 1000 rows of the dataset; nil cells
+// are NULL.
+func (s *PerfService) FetchRows(offset, limit int) [][]*string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.dataset == nil {
 		return [][]*string{}
 	}
-	return s.dataset.Page(offset, limit)
+	return s.dataset.Page(offset, min(limit, maxPerfFetchRows))
 }
 
-// MemStats returns the Go side's current memory use.
-func (s *SpikeService) MemStats() spike.MemStats {
-	return spike.ReadMemStats()
-}
-
-// SleepAndObserve runs a 30-second server-side sleep on engine ("postgres" or
-// "mysql") until the frontend cancels the call. A cancelled promise discards
-// its result, so the outcome also goes out as the "spike:cancel-result" event.
-func (s *SpikeService) SleepAndObserve(ctx context.Context, engine string) spike.CancelResult {
-	res := spike.SleepAndObserve(ctx, engine)
-	s.report.Emit("cancel", map[string]any{"result": res})
-	application.Get().Event.Emit("spike:cancel-result", res)
-	return res
-}
-
-// KeychainWrite stores a dummy value in the spike's keychain entry.
-func (s *SpikeService) KeychainWrite(value string) spike.KeychainStep {
-	return s.reportKeychain(spike.KeychainWrite(value))
-}
-
-// KeychainRead reads the spike's keychain entry.
-func (s *SpikeService) KeychainRead() spike.KeychainStep {
-	return s.reportKeychain(spike.KeychainRead())
-}
-
-// KeychainDelete removes the spike's keychain entry.
-func (s *SpikeService) KeychainDelete() spike.KeychainStep {
-	return s.reportKeychain(spike.KeychainDelete())
-}
-
-func (s *SpikeService) reportKeychain(step spike.KeychainStep) spike.KeychainStep {
-	s.report.Emit("keychain", map[string]any{"step": step})
-	return step
-}
-
-// Report records a result measured in the frontend, such as a scroll benchmark.
-func (s *SpikeService) Report(event string, data map[string]any) {
-	s.report.Emit(event, data)
+// Report records a result measured in the frontend, such as the scroll
+// benchmark. It is ignored unless an autorun is active.
+func (s *PerfService) Report(event string, data map[string]any) {
+	if s.measuring() {
+		s.report.Emit(event, data)
+	}
 }
 
 // Finish ends an autorun: it reports memory use, then quits after
-// QUERRA_SPIKE_LINGER_MS (default 3000) so the dev/perf scripts can sample the
-// process from outside first.
-func (s *SpikeService) Finish() {
-	s.report.Emit("finish", map[string]any{"mem": spike.ReadMemStats()})
+// QUERRA_PERF_LINGER_MS (default 3000) so dev/perf can sample the process
+// from outside first. It is ignored unless an autorun is active.
+func (s *PerfService) Finish() {
+	if !s.measuring() {
+		return
+	}
+	s.report.Emit("finish", map[string]any{"mem": perf.ReadMemStats()})
 	linger := 3000
-	if v, err := strconv.Atoi(os.Getenv("QUERRA_SPIKE_LINGER_MS")); err == nil {
+	if v, err := strconv.Atoi(os.Getenv("QUERRA_PERF_LINGER_MS")); err == nil {
 		linger = v
 	}
 	s.quitAfter(time.Duration(linger) * time.Millisecond)
 }
 
-func (s *SpikeService) quitAfter(d time.Duration) {
+func (s *PerfService) quitAfter(d time.Duration) {
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("perf: quit panicked", "panic", r)
+			}
+		}()
 		time.Sleep(d)
 		application.Get().Quit()
 	}()
