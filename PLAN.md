@@ -252,7 +252,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Database uji tanpa Docker (§5): `dev/testdb.sh` membuat dan mengisi `querra_test*` di server native yang dikonfigurasi lewat `dev/test.env`. Reset, seed, dan drop sudah dicoba di PostgreSQL 18.2 dan MySQL 8.0.45 lokal; MariaDB hanya diuji di CI.
   - [x] CI: unit test Go dan frontend serta build di `macos-latest` dan `windows-latest` (lint dan cek file hasil generate hanya di macOS), plus job integrasi di `ubuntu-latest` dengan PostgreSQL 17, MySQL 8.4, dan MariaDB 11.4 (`.github/workflows/ci.yml`). *Hijau di ketiga push 7 November 2026, terakhir `50f8dba`.*
   - Selesai jika `wails3 dev` membuka jendela di macOS dan CI hijau di kedua OS.
-- [ ] **M0.2 Spike validasi stack** (hasil di `docs/spikes/fase-0.md`) — *pengukuran macOS dan Windows selesai; tinggal uji manual*
+- [ ] **M0.2 Spike validasi stack** (hasil di `docs/spikes/fase-0.md`; sisa uji manual di `docs/test/M0.2.md`) — *pengukuran macOS dan Windows selesai; tinggal uji manual*
   - [x] Grid 100.000 baris × 20 kolom dari Go lewat `FetchRows` bertahap di WKWebView: ±75 fps (batas monitor) pada scroll normal.
   - [x] Grid yang sama di WebView2 (PC Windows sungguhan, `dev/perf/measure_windows.ps1`): ±143 fps (batas monitor 144 Hz) pada scroll normal. `FetchRows` ±3× lebih lambat daripada di macOS, jadi prefetch M1.7 dikalibrasi di Windows.
   - [x] Waktu mulai (median 330 ms), memori idle (76–138 MB), dan ukuran DMG universal (14 MB) di macOS. Windows: median 599 ms, idle 159 MB, installer NSIS 7,7 MB. Peluncuran pertama setelah build baru di Windows 2,4–2,8 dtk, hampir seluruhnya sebelum Go mulai (kemungkinan pemindaian Defender; laporan §4.6).
@@ -261,7 +261,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway, termasuk dengan Smart App Control aktif). *Windows selesai 8 November 2026: installer bertanda "diunduh dari internet" langsung terbuka setelah UAC, tanpa SmartScreen dan tanpa blokir Smart App Control (laporan §4.7). Mac lain belum.*
   - [ ] Tampilan Tailwind v4 di macOS 12 (R3). *Manual, butuh perangkat macOS 12.*
   - [x] **Gerbang keputusan (final, macOS dan Windows):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3.
-- [ ] **M0.3 Shell UI dan fondasi desain** — *selesai dan diuji manual di Windows, termasuk pengukuran §6 (startup median 706 ms, idle 130 MB; laporan §8); menunggu uji manual di macOS (menu native dan shortcut Cmd)*
+- [ ] **M0.3 Shell UI dan fondasi desain** — *selesai dan diuji manual di Windows, termasuk pengukuran §6 (startup median 706 ms, idle 130 MB; laporan §8); menunggu uji manual di macOS (menu native dan shortcut Cmd; checklist di `docs/test/M0.3.md`)*
   - [x] Layout: sidebar, tab bar, area konten, panel hasil, status bar (`frontend/src/app/AppShell.tsx`, `react-resizable-panels` v4). Sidebar dan panel hasil bisa disembunyikan lewat perintah atau dengan menggeser pembatasnya. Ukuran panel diingat di localStorage webview (`lib/storage.ts`); pengaturan penting tetap di store Go (§3.6). Tab query masih placeholder sampai editor M2.3.
   - [x] Token desain terang/gelap (tema mengikuti sistem lewat `app/theme.ts`; pilihan manual di M3.5), warna environment `env-local`, `env-staging`, `env-production` di `index.css`, serta font monospace Geist Mono (`font-mono`) untuk grid dan editor.
   - [x] Registry perintah dan shortcut (`lib/commands`): setiap aksi didaftarkan dengan id, judul i18n, dan keybinding default (`Mod` = Cmd di macOS, Ctrl di Windows). Hanya ada satu listener keydown (`installKeybindings`). Override per id dan deteksi bentrok sudah ada; penyimpanan override menyusul di M4.5. macOS memakai menu native sendiri (`internal/app/menu.go`: App, Edit, Window), karena menu bawaan Wails mengambil Cmd+W (tutup jendela) dan Cmd+R (reload webview, yang membuang tab dan perubahan tertunda).
@@ -404,7 +404,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 ### 4.7 Definition of Done (Setiap Milestone)
 
 1. `wails3 task lint` dan `wails3 task test` hijau. Kode yang menyentuh database juga lulus `wails3 task test:integration`.
-2. Diuji manual di macOS. Build Windows dari CI dijalankan dan dicoba minimal sekali per fase.
+2. Diuji manual di macOS. Build Windows dari CI dijalankan dan dicoba minimal sekali per fase. Langkah dan hasil uji manual per platform dicatat di `docs/test/<milestone>.md`, supaya pengujian bisa dilanjutkan di mesin lain.
 3. Tidak ada string UI yang hardcoded dan tidak ada rahasia di log maupun SQLite lokal.
 4. Checkbox di PLAN.md dicentang. CLAUDE.md diperbarui bila ada konvensi baru.
 
