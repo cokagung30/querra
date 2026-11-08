@@ -242,11 +242,13 @@ Temuan:
 
 Alasannya: Querra dipakai pribadi dan oleh rekan dekat tanpa sertifikat berbayar, dan model ancaman "malware yang sudah berjalan sebagai user Anda" juga tidak dilindungi di Windows. Pilihan ini ditinjau ulang bila suatu saat memakai Developer ID (PLAN R10), karena dengan signature yang stabil, API native tidak lagi memunculkan prompt setelah update.
 
-## 8. Pengukuran Ulang Setelah M0.3 (Windows)
-
-*8 November 2026 · PC Windows pada §2 · `dev/perf/measure_windows.ps1` dengan mode autorun `PerfService`*
+## 8. Pengukuran Ulang Setelah M0.3
 
 M0.3 mengganti halaman spike dengan shell sungguhan (sidebar, tab, panel hasil, status bar, i18n) dan menghapus driver database serta keychain dari binary. Grid benchmark tetap memakai grid spike, kini sebagai overlay di atas shell dengan ukuran area yang sama.
+
+### 8.1 Windows
+
+*8 November 2026 · PC Windows pada §2 · `dev/perf/measure_windows.ps1` dengan mode autorun `PerfService`*
 
 | Pengukuran | M0.2 (halaman spike, §4.6) | M0.3 (shell) |
 | --- | --- | --- |
@@ -265,4 +267,30 @@ Temuan:
 - Memori idle lebih rendah, tetapi jumlah memori proses WebView2 memang bervariasi antar-run (lihat juga §4.2 untuk macOS). Jangan menyimpulkan penghematan dari satu run.
 - `wheel-y` turun ke 121 fps dengan satu frame panjang, dan ada satu `FetchRows` lambat (237 ms). Ini hasil satu run, jadi bisa saja noise. Grid tetap lancar untuk target ±60 fps, dan angkanya diukur ulang dengan grid sungguhan di M1.7.
 - Binary mengecil karena pgx, driver MySQL, dan go-keyring ikut terhapus bersama spike. Ukurannya akan naik lagi di M1.1–M1.2.
+
+### 8.2 macOS
+
+*8 November 2026 · Mac pada §2 · `dev/perf/measure_macos.py` dengan mode autorun `PerfService` · build produksi arm64 dari commit `18555de`*
+
+| Pengukuran | M0.2 (halaman spike, §4.1–4.3) | M0.3 (shell) |
+| --- | --- | --- |
+| Waktu mulai, median 5 kali | 330–332 ms | 337 ms |
+| Peluncuran pertama | 833–1.317 ms (setelah build baru) | 313 ms (aplikasi sudah dibuka sekali saat uji C2) |
+| Memori idle (total) | 76–138 MB | 83 MB (aplikasi 30, WebContent 36, GPU 11, Networking 6) |
+| Ukuran `querra.app` / binary | 31 MB (universal) / — | 11,8 / 8,8 MB (arm64 saja) |
+| Grid `wheel-y` | 75 fps, p95 14 ms, 0 frame > 50 ms | 75 fps, p95 14 ms, 0 frame > 50 ms |
+| Grid `fling-y` | 48–67 fps, baris kosong ±30–40 % frame | 65 fps, baris kosong ±30 % frame, 1 frame > 50 ms (128 ms) |
+| Grid `wheel-x` | 75 fps | 75 fps |
+| `FetchRows` rata-rata / maks | 4,3–5,4 / 16–22 ms | 3,9 / 21 ms |
+| Memori dataset 100k × 20 dimuat | 341 MB | 362 MB |
+| Memori tepat setelah benchmark | 617 MB | 735 MB |
+| Memori 20 dtk setelah benchmark | 452 MB | 627 MB |
+
+Temuan:
+
+- Di macOS, shell sungguhan tidak menambah waktu mulai yang terukur (337 ms vs 330 ms), berbeda dengan Windows yang naik ±100 ms. Memori idle tetap di rentang M0.2.
+- Peluncuran pertama tidak bisa dibandingkan dengan M0.2, karena build ini sudah dibuka sekali saat uji manual C2, sehingga signature sudah diverifikasi dan cache sudah hangat. Peluncuran pertama setelah build baru tidak diukur ulang.
+- Grid tetap di batas refresh monitor 75 Hz untuk `wheel-y` dan `wheel-x`.
+- Memori setelah benchmark lebih tinggi daripada M0.2, terutama WebContent (425 MB, lalu 375 MB setelah 20 dtk; M0.2: 284 lalu 184 MB). Windows menunjukkan arah yang sama. Ini kondisi stres (100k baris dan 200× `FetchRows`), bukan idle, dan hasil satu run, jadi tidak menyentuh anggaran idle. Memori WebContent setelah scroll diukur ulang dengan grid sungguhan di M1.7.
+- Ukuran `.app` tidak sebanding dengan M0.2 karena build ini hanya arm64. DMG tidak dibuat ulang dalam pengukuran ini.
 
