@@ -94,6 +94,7 @@ Dependencies point one way: frontend → `frontend/bindings` → `internal/app` 
 - After saving, a secret is never sent back to the frontend; it only gets `hasPassword`-style flags.
 - Store SSH private key **paths**, not key contents (Windows Credential Manager has a small size limit).
 - Logs must not contain secrets, DSNs with passwords, or row data.
+- `PRIVACY.md` is the privacy policy the Microsoft Store listing links to. When a change affects what Querra stores, logs or sends (query history, updater, export), update it in the same change.
 - No network traffic except to the DB/SSH hosts the user configured, plus the update check (Wails v3 updater). The update check sends only version and platform, and the user can turn it off. No telemetry.
 - The updater signing key (`updater.key`) lives only in CI secrets and an offline backup. Never commit it; only `updater.key.pub` is embedded in the app.
 - Tests use the in-memory fake from `internal/secrets` (`secrets.NewMemory()`), never the real keychain. The one exception is the opt-in smoke test (`go test -tags keychain ./internal/secrets -run TestKeychainSmoke -v`). It writes dummy values under the separate service `com.balikaryadigital.querra.smoke-test` and deletes them, and it's run by hand once per platform.
