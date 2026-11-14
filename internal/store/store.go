@@ -123,6 +123,22 @@ func dsn(path string) string {
 	return path + "?" + q.Encode()
 }
 
+// inTx runs fn in a transaction, committing when it returns nil.
+func (s *Store) inTx(ctx context.Context, op string, fn func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	return nil
+}
+
 // Close closes the database.
 func (s *Store) Close() error {
 	return s.db.Close()

@@ -80,6 +80,64 @@ func TestOpenWrongPasswordKeepsItOutOfTheError(t *testing.T) {
 	}
 }
 
+func TestOpenMarksLoginErrors(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig(t)
+	cfg.Database = "querra_test_no_such_db"
+	if c, err := (Driver{}).Open(ctx, cfg, nil); !errors.Is(err, driver.ErrDatabaseNotFound) {
+		if c != nil {
+			_ = c.Close()
+		}
+		t.Errorf("Open(missing database) error = %v, want ErrDatabaseNotFound", err)
+	}
+
+	cfg = testConfig(t)
+	cfg.Password = "wrong-password-7f3a9c"
+	c, err := Driver{}.Open(ctx, cfg, nil)
+	if err == nil {
+		_ = c.Close()
+		t.Skip("the server trusts local connections, so any password works")
+	}
+	if !errors.Is(err, driver.ErrAuthFailed) {
+		t.Errorf("Open(wrong password) error = %v, want ErrAuthFailed", err)
+	}
+}
+
+func TestServerInfo(t *testing.T) {
+	ctx := context.Background()
+	c := openTest(t)
+	var version string
+	if err := c.Pool().QueryRowContext(ctx, "SHOW server_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	info, err := c.ServerInfo(ctx)
+	if err != nil || info.Version != version {
+		t.Fatalf("ServerInfo() = %+v, %v; want version %q", info, err, version)
+	}
+
+	// Whatever sslmode=prefer chose, the server must agree.
+	var ssl bool
+	err = c.Pool().QueryRowContext(ctx,
+		"SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()").Scan(&ssl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.TLS != ssl {
+		t.Errorf("ServerInfo().TLS = %v, but pg_stat_ssl says %v", info.TLS, ssl)
+	}
+
+	cfg := testConfig(t)
+	cfg.SSL.Mode = driver.SSLDisable
+	plain, err := Driver{}.Open(ctx, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = plain.Close() }()
+	if info, err := plain.ServerInfo(ctx); err != nil || info.TLS {
+		t.Errorf("ServerInfo() with sslmode=disable = %+v, %v; want TLS false", info, err)
+	}
+}
+
 func TestSessionSurvivesCancel(t *testing.T) {
 	c := openTest(t)
 	ctx := context.Background()

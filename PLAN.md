@@ -133,6 +133,9 @@ type Driver interface {
     Capabilities() Capabilities // Schemas, Databases, MaterializedViews, Returning
     Dialect() Dialect
     Codec() Codec // kind per kolom hasil + nilai → teks (§3.5)
+    DefaultPort() int // 0 untuk engine tanpa server jaringan (SQLite)
+    // Error login ditandai dengan ErrAuthFailed, ErrDatabaseNotFound, ErrPermissionDenied,
+    // atau ErrTLSRefused lewat driver.Mark (M1.3, §3.9).
     Open(ctx context.Context, cfg Config, dial DialFunc) (Conn, error)
 }
 
@@ -141,6 +144,7 @@ type Conn interface {
     Pool() *sql.DB                                   // grid, introspeksi, ekspor
     NewSession(ctx context.Context) (Session, error) // koneksi yang di-pin untuk satu tab editor
     Introspector() Introspector
+    ServerInfo(ctx context.Context) (ServerInfo, error) // versi server, TLS atau tidak (Test Connection)
     Close() error
 }
 
@@ -207,7 +211,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 | Tabel | Isi |
 | --- | --- |
 | `connection_groups` | `id, name, sort_order` |
-| `connections` | `id (uuid), group_id, name, engine, env, color, host, port, username, database_name, ssl_json, ssh_json, options_json, read_only, sort_order, created_at, updated_at`; **tanpa rahasia** |
+| `connections` | `id (uuid), group_id, name, engine, env, color, host, port, username, database_name, ssl_json, ssh_json, options_json, read_only, sort_order, password_state, created_at, updated_at`; **tanpa rahasia**. `password_state` (`none`/`saved`/`required`, M1.3) hanya mencatat apakah password ada di keychain |
 | `known_hosts` | `host, port, key_type, fingerprint_sha256, added_at` |
 | `query_history` | `id, connection_id, database, sql, started_at, duration_ms, row_count, status, error`; diindeks per koneksi dan waktu; ada retensi |
 | `snippets` | `id, name, sql, engine (nullable), tags, created_at, updated_at` |
@@ -245,7 +249,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 ### 3.9 Penanganan Error
 
 - `apperr.Error{Code, Message, Detail, Hint, Position}` memakai field yang diekspor. Wails v3 menyerialisasi field ini ke JSON, sehingga sampai di frontend sebagai `error.cause`. `MarshalError` dipasang di semua service untuk membungkus error lain menjadi `apperr` dengan kode `internal`.
-- Error driver dipetakan per engine ke kode yang stabil: `dns_failed`, `connection_refused`, `timeout`, `auth_failed`, `database_not_found`, `tls_required`, `tls_verify_failed`, `ssh_auth_failed`, `ssh_host_key_unknown`, `ssh_host_key_mismatch`, `permission_denied`, `syntax_error`, `query_cancelled`, `connection_lost`, `read_only`, `confirmation_required`, `internal`.
+- Error driver dipetakan per engine ke kode yang stabil: `dns_failed`, `connection_refused`, `network_error`, `timeout`, `auth_failed`, `database_not_found`, `tls_required`, `tls_verify_failed`, `tls_failed`, `ssh_auth_failed`, `ssh_host_key_unknown`, `ssh_host_key_mismatch`, `permission_denied`, `syntax_error`, `query_cancelled`, `connection_lost`, `read_only`, `confirmation_required`, `internal`. Kode umum untuk permintaan: `invalid_input`, `invalid_file`, `not_found`, `cancelled`. Kode baru ditambahkan oleh milestone yang pertama memakainya, bersama terjemahannya di `en.json` (`errors.<code>`, saran di `errorHints.<code>`); tes di `internal/apperr` memeriksa keduanya. Kode M1.3 ada di `internal/apperr`.
 - Tombol Test Connection (FR-04) melaporkan tahap demi tahap: SSH → TCP → TLS → autentikasi → ping. Pengguna bisa melihat tahap mana yang gagal beserta saran perbaikannya.
 - Goroutine yang dibuat oleh service wajib memakai `recover`. Query yang gagal tidak boleh membuat aplikasi crash.
 
@@ -282,10 +286,10 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Repositori `cokagung30/querra` dibuat publik (8 November 2026), jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
   - [x] Ikon aplikasi dari logo Querra (`build/icon-src/`): squircle navy untuk macOS (termasuk ikon Icon Composer macOS 26), logo transparan untuk Windows, serta ikon dan background DMG tanpa branding Wails.
 - [ ] **M0.5 Spike distribusi Windows lewat Microsoft Store** (keputusan §8.1, R10)
-  - [ ] Pemilik: akun developer Microsoft Store (Individual atau Company; jenisnya tidak bisa diubah kemudian), verifikasi identitas, dan reservasi nama aplikasi di Partner Center.
+  - [x] Pemilik: akun developer Microsoft Store (Individual atau Company; jenisnya tidak bisa diubah kemudian), verifikasi identitas, dan reservasi nama aplikasi di Partner Center. *Akun Individual atas nama penerbit "Bali Digital Karya", terverifikasi; nama "Querra" direservasi.*
   - [x] Identitas paket dari Partner Center dicatat di `build/windows/msix/app_manifest.xml`: `BaliDigitalKarya.Querra`, `CN=D674B8A2-7FFA-4BFB-AFD0-709702A95026`, "Bali Digital Karya". Nilai ini publik, bukan rahasia. Manifest dirawat manual dan dipasang lewat `--manifest`, karena tanpa flag itu Wails membuat manifest sendiri dari `config.yml`. Ikon diambil dari `build/icon-src/logo.png` (`--icon`).
-  - [ ] Paket MSIX dari Wails (`wails3 task windows:create:msix:package`, MakeAppx dari Windows SDK) di CI, ikut artifact `querra-windows` sebagai `querra-amd64.msix`. *Jalan pertama kali di CI 14 November 2026 (commit `4b95a92`), dan paketnya diterima Partner Center.* Gambar untuk listing Store disimpan di `build/store/`. Cek dampak container MSIX: lokasi `querra.db` (`%AppData%` divirtualisasi), Credential Manager, data WebView2, dan uninstall.
-  - [ ] Submission pertama sebagai listing tersembunyi atau private audience. Kebutuhan sertifikasi Store (mis. kebijakan privasi) dicek di sini.
+  - [ ] Paket MSIX dari Wails (`wails3 task windows:create:msix:package`, MakeAppx dari Windows SDK) di CI, ikut artifact `querra-windows` sebagai `querra-amd64.msix`. *Jalan pertama kali di CI 14 November 2026 (commit `4b95a92`), dan paketnya diterima Partner Center.* Gambar untuk listing Store disimpan di `build/store/`. Cek dampak container MSIX: lokasi `querra.db` (`%AppData%` divirtualisasi), Credential Manager, data WebView2, dan uninstall (checklist `docs/test/M0.5.md`). *Build pertama belum membuka `querra.db` maupun Credential Manager, karena `store` dan `secrets` baru dipasang ke `main.go` di M1.3. Kedua cek itu menunggu build Store pertama yang memuat M1.3.*
+  - [ ] Submission pertama sebagai listing tersembunyi atau private audience. Kebutuhan sertifikasi Store (mis. kebijakan privasi) dicek di sini. *Dikirim 14 November 2026 sebagai private audience (grup "Querra Tester"), versi paket `0.1.0.0`. Yang diminta Partner Center: kebijakan privasi (`PRIVACY.md`), age rating, minimal satu screenshot, dan alasan memakai capability terbatas `runFullTrust`. Deskripsi listing menyebut build ini early preview, dan fitur yang belum ada ditandai "coming", karena aplikasi yang tampak belum lengkap bisa gagal sertifikasi. Screenshot dirender dari frontend asli di Edge headless (mesin yang sama dengan WebView2). Menunggu hasil sertifikasi.*
   - Selesai jika versi Store terpasang dan berjalan di PC Windows dengan Smart App Control aktif, lalu sisa uji M0.3 Windows dijalankan di versi itu.
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
@@ -300,10 +304,11 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Introspector berbasis `pg_catalog`: database, schema (TOAST dan temp disembunyikan, `pg_catalog`/`information_schema` ditandai sistem), tabel (termasuk partitioned dan foreign table; partisi tidak didaftar), view, materialized view, fungsi dan procedure (dengan signature), kolom (tipe, `kind`, nullable, default, komentar), PK, index (termasuk ekspresi), FK (aksi ON UPDATE/DELETE), constraint unique/check/exclusion, dan estimasi baris (`reltuples`, -1 bila belum ada statistik). Katalog yang dipakai butuh PostgreSQL 11+.
   - [x] Pemetaan tipe PG ke `kind` dan konversi nilai ke string (§3.5). Teks keluaran PostgreSQL sendiri dipertahankan (numeric, json, interval, array, …); float mengikuti format PG 12+; bytea menjadi `0x…`; timestamptz ditampilkan di zona waktu lokal.
   - [ ] Uji integrasi terhadap PostgreSQL (lokal dan CI, §5): `internal/driver/postgres/integration_test.go` (koneksi, SSL, sesi tahan pembatalan, read-only, introspeksi seed, nilai semua kolom `all_types`). *Lulus di CI (PostgreSQL 17); Mac (PostgreSQL 18) belum.*
-- [ ] **M1.3 Layanan koneksi** (FR-01, FR-03, FR-04, FR-05)
-  - CRUD, duplikasi, grup, pengurutan, environment (Local/Staging/Production) dan warna, flag hanya-baca.
-  - Test Connection bertahap dengan pesan error yang mudah dipahami (§3.9).
-  - Ekspor dan impor JSON tanpa rahasia.
+- [ ] **M1.3 Layanan koneksi** (FR-01, FR-03, FR-04, FR-05) — *lapisan domain selesai 14 November 2026 di Windows; tes Go menunggu CI karena Smart App Control. Lapisan Wails (`ConnectionService`, `main.go`, bindings) dikerjakan di Mac, karena `wails3` diblokir di PC Windows (checklist `docs/test/M1.3.md`)*
+  - [x] CRUD, duplikasi, grup, pengurutan, environment (Local/Staging/Production) dan warna, flag hanya-baca (`internal/connection`). Keputusan pemilik (14 November 2026): warna berupa palet tetap bernama (`red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `gray`, atau kosong = warna environment) yang dipetakan ke token tema; duplikasi ikut menyalin semua rahasia di keychain dan menaruh salinannya tepat setelah aslinya; nama salinan dipilih frontend agar bisa diterjemahkan. Nama grup unik tanpa membedakan huruf besar-kecil. Status password disimpan di kolom `password_state` (`none`/`saved`/`required`, migrasi `0002`), jadi daftar koneksi tidak perlu membaca keychain per koneksi; nilainya tetap hanya di keychain. Perubahan password dikirim sebagai `keep`/`set`/`clear`. Engine tanpa server jaringan (`DefaultPort() == 0`, SQLite di M4.2) memakai path file di `Database` dan tidak butuh host.
+  - [x] Test Connection bertahap dengan pesan error yang mudah dipahami (§3.9): tahap TCP → TLS → login → ping, masing-masing `ok`/`failed`/`skipped`/`not_run`, plus versi server dan apakah koneksinya memakai TLS. Tahap TCP diketahui dari dialer milik Test sendiri yang dipasang lewat `DialFunc`. Adapter menandai error login dengan `driver.ErrAuthFailed`, `ErrDatabaseNotFound`, `ErrPermissionDenied`, dan `ErrTLSRefused` (`driver.Mark`); error DNS, jaringan, timeout, dan sertifikat adalah error Go standar. `apperr.FromConnect` memetakan semuanya ke kode §3.9. `Conn.ServerInfo` membaca versi dan status TLS.
+  - [x] Ekspor dan impor JSON tanpa rahasia: `{"format": "querra-connections", "version": 1, ...}`, grup dirujuk dengan nama, dan `passwordRequired` menandai koneksi yang punya password. Keputusan pemilik: impor selalu menambah koneksi baru (ID baru) dan tidak pernah menimpa; grup dicocokkan dengan nama. Seluruh file diperiksa sebelum ada yang ditambahkan; file dari Querra yang lebih baru atau dengan field tak dikenal ditolak.
+  - [ ] `ConnectionService` di `internal/app` (tipis: validasi, panggil `connection.Service`, petakan error `connection.ErrInvalid`/`ErrInvalidFile`/`ErrNotFound` ke `apperr`), `apperr.Marshal` sebagai `MarshalError`, store dan `secrets.NewKeyring()` dibuka di `main.go`, impor `internal/driver/postgres`, lalu `wails3 task bindings`. Dialog simpan/buka file ekspor-impor ikut di sini atau di M1.4.
 - [ ] **M1.4 UI koneksi**
   - Layar awal: daftar koneksi per grup, pencarian, buka dengan Enter atau klik ganda.
   - Form koneksi (tab General / SSL / SSH / Advanced; tab SSH nonaktif sampai M2.7), tombol Test, penanda Production.

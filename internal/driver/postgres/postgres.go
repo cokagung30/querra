@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -52,6 +53,8 @@ func (Driver) Dialect() driver.Dialect { return dialect{} }
 
 func (Driver) Codec() driver.Codec { return codec{} }
 
+func (Driver) DefaultPort() int { return defaultPort }
+
 // Open connects to cfg.Database. PostgreSQL connections are bound to one
 // database, so browsing another one means opening another Conn.
 func (Driver) Open(ctx context.Context, cfg driver.Config, dial driver.DialFunc) (driver.Conn, error) {
@@ -62,7 +65,7 @@ func (Driver) Open(ctx context.Context, cfg driver.Config, dial driver.DialFunc)
 	db := openPool(connCfg)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("connect to postgres: %w", err)
+		return nil, fmt.Errorf("connect to postgres: %w", markErr(err))
 	}
 	return &conn{db: db, cfg: connCfg}, nil
 }
@@ -161,6 +164,63 @@ func (c *conn) Introspector() driver.Introspector { return introspector{db: c.db
 
 func (c *conn) Close() error { return c.db.Close() }
 
+// ServerInfo reads the version the server reported at startup and whether a
+// pooled connection uses TLS; with sslmode=prefer it may not.
+func (c *conn) ServerInfo(ctx context.Context) (driver.ServerInfo, error) {
+	sc, err := c.db.Conn(ctx)
+	if err != nil {
+		return driver.ServerInfo{}, fmt.Errorf("postgres server info: %w", markErr(err))
+	}
+	defer func() { _ = sc.Close() }()
+
+	var info driver.ServerInfo
+	err = sc.Raw(func(dc any) error {
+		pc, ok := dc.(*stdlib.Conn)
+		if !ok {
+			return fmt.Errorf("unexpected driver connection %T", dc)
+		}
+		pg := pc.Conn().PgConn()
+		info.Version = pg.ParameterStatus("server_version")
+		_, info.TLS = pg.Conn().(*tls.Conn)
+		return nil
+	})
+	if err != nil {
+		return driver.ServerInfo{}, fmt.Errorf("postgres server info: %w", err)
+	}
+	return info, nil
+}
+
+// SQLSTATEs a failed connection attempt can end with.
+const (
+	codeInvalidPassword       = "28P01"
+	codeInvalidAuthorization  = "28000" // unknown role, or no pg_hba.conf entry
+	codeInvalidCatalogName    = "3D000" // no such database
+	codeInsufficientPrivilege = "42501" // no CONNECT privilege
+)
+
+// markErr marks a connection error with the driver errors it shows (PLAN
+// §3.9). With sslmode=prefer, pgx joins the error of the TLS attempt with that
+// of the plain one, so one error can carry both a refused TLS and a failed
+// login.
+func markErr(err error) error {
+	var marks []error
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		switch pgErr.Code {
+		case codeInvalidPassword, codeInvalidAuthorization:
+			marks = append(marks, driver.ErrAuthFailed)
+		case codeInvalidCatalogName:
+			marks = append(marks, driver.ErrDatabaseNotFound)
+		case codeInsufficientPrivilege:
+			marks = append(marks, driver.ErrPermissionDenied)
+		}
+	}
+	// pgconn reports this with errors.New, so its text is all there is.
+	if strings.Contains(err.Error(), "server refused TLS connection") {
+		marks = append(marks, driver.ErrTLSRefused)
+	}
+	return driver.Mark(err, marks...)
+}
+
 // NewSession gives the session a one-connection pool of its own, so its
 // server state is never shared and its connection never returns to the
 // shared pool.
@@ -170,7 +230,7 @@ func (c *conn) NewSession(ctx context.Context) (driver.Session, error) {
 	sc, err := db.Conn(ctx)
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("open postgres session: %w", err)
+		return nil, fmt.Errorf("open postgres session: %w", markErr(err))
 	}
 	return &session{db: db, conn: sc}, nil
 }

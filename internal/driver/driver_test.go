@@ -41,6 +41,29 @@ func TestRegistry(t *testing.T) {
 	Register(fakeDriver{engine: engine})
 }
 
+func TestMark(t *testing.T) {
+	base := errors.New("connect: boom")
+	if Mark(nil, ErrAuthFailed) != nil {
+		t.Error("Mark(nil) is not nil")
+	}
+	if errors.As(Mark(base), new(*markedError)) {
+		t.Error("Mark without marks wrapped the error")
+	}
+
+	got := fmt.Errorf("open: %w", Mark(base, ErrAuthFailed, ErrTLSRefused))
+	if got.Error() != "open: connect: boom" {
+		t.Errorf("message = %q, want the original one", got)
+	}
+	for _, target := range []error{base, ErrAuthFailed, ErrTLSRefused} {
+		if !errors.Is(got, target) {
+			t.Errorf("errors.Is(got, %v) = false, want true", target)
+		}
+	}
+	if errors.Is(got, ErrDatabaseNotFound) {
+		t.Error("errors.Is(got, ErrDatabaseNotFound) = true for a mark it was not given")
+	}
+}
+
 // sprintCodec formats values with fmt, enough to check ScanRow's plumbing.
 type sprintCodec struct{}
 

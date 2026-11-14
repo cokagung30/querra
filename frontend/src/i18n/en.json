@@ -46,5 +46,34 @@
   },
   "shortcut": {
     "withKeybinding": "{{title}} ({{keybinding}})"
+  },
+  "errors": {
+    "internal": "Something went wrong.",
+    "invalid_input": "Some values are not valid.",
+    "invalid_file": "This file can't be imported.",
+    "not_found": "It no longer exists.",
+    "cancelled": "Cancelled.",
+    "dns_failed": "The host name could not be found.",
+    "connection_refused": "The server refused the connection.",
+    "network_error": "The server could not be reached.",
+    "timeout": "The server did not answer in time.",
+    "tls_required": "The server does not support TLS.",
+    "tls_verify_failed": "The server's certificate could not be verified.",
+    "tls_failed": "The TLS connection failed.",
+    "auth_failed": "The user name or password was not accepted.",
+    "database_not_found": "The database does not exist.",
+    "permission_denied": "Permission denied."
+  },
+  "errorHints": {
+    "dns_failed": "Check the host name for typos.",
+    "connection_refused": "Check the port, and that the database server is running.",
+    "network_error": "Check your network connection, VPN or firewall.",
+    "timeout": "Check the host and port, and that no firewall blocks the connection.",
+    "tls_required": "Set SSL mode to Prefer or Disable, or turn on TLS on the server.",
+    "tls_verify_failed": "Check the CA certificate file. SSL mode Require without a CA file skips verification.",
+    "tls_failed": "Check the SSL mode and the certificate and key files.",
+    "auth_failed": "Check the user name and password.",
+    "database_not_found": "Check the database name.",
+    "permission_denied": "Ask the database administrator for access to this database."
   }
 }

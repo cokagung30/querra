@@ -11,8 +11,9 @@ Querra is a desktop database client published by Bali Digital Karya. This policy
 - **App settings and layout**, such as panel sizes, preferences and keyboard shortcuts.
 - **Query history and snippets**, when you use those features.
 - **Log files** that help diagnose problems. Logs never contain passwords or data from your databases.
+- **Connection export files**, when you export connections to share them or move them to another computer. They hold the connection settings above, never passwords or passphrases; importing one asks for the passwords again.
 
-This information stays in Querra's data folder and your system's credential store, and Querra never uploads it anywhere.
+This information stays on your computer, in Querra's data folder, your system's credential store, and any export files you save. Querra never uploads it anywhere.
 
 ## What Querra sends over the network
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 )
 
@@ -62,6 +63,22 @@ func (r *Groups) Update(ctx context.Context, g Group) error {
 		return fmt.Errorf("update group %s: %w", g.ID, err)
 	}
 	return expectOneRow(res, "update group "+g.ID)
+}
+
+// Arrange sets the groups' order to that of ids, as one change.
+func (r *Groups) Arrange(ctx context.Context, ids []string) error {
+	return r.s.inTx(ctx, "arrange groups", func(tx *sql.Tx) error {
+		for i, id := range ids {
+			res, err := tx.ExecContext(ctx, `UPDATE connection_groups SET sort_order = ? WHERE id = ?`, i, id)
+			if err != nil {
+				return err
+			}
+			if err := expectOneRow(res, "group "+id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Delete removes a group. Its connections stay, without a group.

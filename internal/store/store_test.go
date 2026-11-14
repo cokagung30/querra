@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -267,6 +268,8 @@ func TestConnectionRoundTrip(t *testing.T) {
 		Options:   json.RawMessage(`{"timezone":"+08:00"}`),
 		ReadOnly:  true,
 		SortOrder: 3,
+
+		PasswordState: "required",
 	}
 	created, err := s.Connections.Create(ctx, want)
 	if err != nil {
@@ -297,6 +300,9 @@ func TestConnectionDefaultsAndValidation(t *testing.T) {
 	}
 	if string(c.SSL) != "{}" || string(c.SSH) != "{}" || string(c.Options) != "{}" || c.GroupID != "" {
 		t.Fatalf("defaults = ssl %s, ssh %s, options %s, group %q; want {} and no group", c.SSL, c.SSH, c.Options, c.GroupID)
+	}
+	if got, err := s.Connections.Get(ctx, c.ID); err != nil || got.PasswordState != "none" {
+		t.Fatalf("PasswordState = %q, %v; want the default none", got.PasswordState, err)
 	}
 
 	c, err = s.Connections.Create(ctx, Connection{Name: "null", Engine: "postgres", Env: "local", SSH: json.RawMessage(` null `)})
@@ -329,12 +335,12 @@ func TestConnectionUpdateListDelete(t *testing.T) {
 
 	later := fixedNow.Add(time.Hour)
 	s.now = func() time.Time { return later }
-	b.Name, b.Port, b.ReadOnly = "Beta renamed", 5433, true
+	b.Name, b.Port, b.ReadOnly, b.PasswordState = "Beta renamed", 5433, true, "saved"
 	updated, err := s.Connections.Update(ctx, b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Name != "Beta renamed" || updated.Port != 5433 || !updated.ReadOnly {
+	if updated.Name != "Beta renamed" || updated.Port != 5433 || !updated.ReadOnly || updated.PasswordState != "saved" {
 		t.Fatalf("Update() = %+v, want the new values", updated)
 	}
 	if !updated.CreatedAt.Equal(fixedNow) || !updated.UpdatedAt.Equal(later) {
@@ -360,6 +366,68 @@ func TestConnectionUpdateListDelete(t *testing.T) {
 	}
 	if err := s.Connections.Delete(ctx, b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second Delete() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestArrange(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	g1, _ := s.Groups.Create(ctx, Group{Name: "one", SortOrder: 0})
+	g2, _ := s.Groups.Create(ctx, Group{Name: "two", SortOrder: 1})
+	var ids []string
+	for _, name := range []string{"a", "b", "c"} {
+		c, err := s.Connections.Create(ctx, Connection{GroupID: g1.ID, Name: name, Engine: "postgres", Env: "local"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, c.ID)
+	}
+
+	// Move c to the front of group two, then reverse a and b in group one.
+	later := fixedNow.Add(time.Hour)
+	s.now = func() time.Time { return later }
+	if err := s.Connections.Arrange(ctx, g2.ID, []string{ids[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Connections.Arrange(ctx, g1.ID, []string{ids[1], ids[0]}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Connections.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range list {
+		got = append(got, fmt.Sprintf("%s:%s:%d", c.Name, map[string]string{g1.ID: "one", g2.ID: "two"}[c.GroupID], c.SortOrder))
+		if !c.UpdatedAt.Equal(fixedNow) {
+			t.Errorf("%s UpdatedAt = %v, want it untouched by Arrange", c.Name, c.UpdatedAt)
+		}
+	}
+	if want := "b:one:0 c:two:0 a:one:1"; strings.Join(got, " ") != want {
+		t.Errorf("after Arrange = %s, want %s", strings.Join(got, " "), want)
+	}
+
+	// An unknown id rolls the whole change back.
+	err = s.Connections.Arrange(ctx, "", []string{ids[0], "missing"})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Arrange(missing) error = %v, want ErrNotFound", err)
+	}
+	if a, _ := s.Connections.Get(ctx, ids[0]); a.GroupID != g1.ID || a.SortOrder != 1 {
+		t.Errorf("a = group %q, order %d after a failed Arrange; want it unchanged", a.GroupID, a.SortOrder)
+	}
+
+	if err := s.Groups.Arrange(ctx, []string{g2.ID, g1.ID}); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := s.Groups.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(groups); got != "two,one" {
+		t.Errorf("groups after Arrange = %s, want two,one", got)
+	}
+	if err := s.Groups.Arrange(ctx, []string{g1.ID, "missing"}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Groups.Arrange(missing) error = %v, want ErrNotFound", err)
 	}
 }
 

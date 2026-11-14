@@ -29,9 +29,13 @@ type Driver interface {
 	Capabilities() Capabilities
 	Dialect() Dialect
 	Codec() Codec
+	// DefaultPort is the port Open uses when Config.Port is 0, or 0 for an
+	// engine without a network server.
+	DefaultPort() int
 	// Open connects to cfg's server and database and checks that the
 	// connection works. A non-nil dial replaces the network dialer, e.g. with
-	// an SSH tunnel (M2.7).
+	// an SSH tunnel (M2.7); the host name then reaches it unresolved. Errors
+	// are marked with ErrAuthFailed and the like where they apply (Mark).
 	Open(ctx context.Context, cfg Config, dial DialFunc) (Conn, error)
 }
 
@@ -93,7 +97,17 @@ type Conn interface {
 	// NewSession opens a server connection of its own for one editor tab.
 	NewSession(ctx context.Context) (Session, error)
 	Introspector() Introspector
+	// ServerInfo describes the server and how the pool reaches it.
+	ServerInfo(ctx context.Context) (ServerInfo, error)
 	Close() error
+}
+
+// ServerInfo is what Test Connection reports about a server.
+type ServerInfo struct {
+	// Version is the server's own version string, e.g. "17.2".
+	Version string
+	// TLS means the connection is encrypted.
+	TLS bool
 }
 
 // Session is one editor tab's own server connection, so transactions, SET and

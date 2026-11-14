@@ -30,15 +30,19 @@ type Connection struct {
 	Options   json.RawMessage // engine-specific options; empty means {}
 	ReadOnly  bool
 	SortOrder int
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// PasswordState says whether the keychain holds the database password:
+	// "none", "saved" or "required" (migration 0002). "" means "none".
+	PasswordState string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Connections stores saved connections.
 type Connections struct{ s *Store }
 
 const connectionColumns = `id, group_id, name, engine, env, color, host, port, username,
-	database_name, ssl_json, ssh_json, options_json, read_only, sort_order, created_at, updated_at`
+	database_name, ssl_json, ssh_json, options_json, read_only, sort_order, password_state,
+	created_at, updated_at`
 
 // List returns all connections by sort order, then name.
 func (r *Connections) List(ctx context.Context) ([]Connection, error) {
@@ -84,6 +88,7 @@ func (r *Connections) Create(ctx context.Context, c Connection) (Connection, err
 	}
 	now := r.s.now().UTC().Truncate(time.Millisecond)
 	c.CreatedAt, c.UpdatedAt = now, now
+	c.PasswordState = passwordState(c.PasswordState)
 
 	ssl, ssh, opts, err := connectionJSON(c)
 	if err != nil {
@@ -91,9 +96,10 @@ func (r *Connections) Create(ctx context.Context, c Connection) (Connection, err
 	}
 	_, err = r.s.db.ExecContext(ctx,
 		`INSERT INTO connections (`+connectionColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, nullIfEmpty(c.GroupID), c.Name, c.Engine, c.Env, c.Color, c.Host, c.Port, c.Username,
-		c.Database, ssl, ssh, opts, c.ReadOnly, c.SortOrder, formatTime(c.CreatedAt), formatTime(c.UpdatedAt))
+		c.Database, ssl, ssh, opts, c.ReadOnly, c.SortOrder, c.PasswordState,
+		formatTime(c.CreatedAt), formatTime(c.UpdatedAt))
 	if err != nil {
 		return Connection{}, fmt.Errorf("create connection: %w", err)
 	}
@@ -113,10 +119,11 @@ func (r *Connections) Update(ctx context.Context, c Connection) (Connection, err
 	res, err := r.s.db.ExecContext(ctx,
 		`UPDATE connections SET group_id = ?, name = ?, engine = ?, env = ?, color = ?, host = ?,
 			port = ?, username = ?, database_name = ?, ssl_json = ?, ssh_json = ?, options_json = ?,
-			read_only = ?, sort_order = ?, updated_at = ?
+			read_only = ?, sort_order = ?, password_state = ?, updated_at = ?
 		WHERE id = ?`,
 		nullIfEmpty(c.GroupID), c.Name, c.Engine, c.Env, c.Color, c.Host, c.Port, c.Username,
-		c.Database, ssl, ssh, opts, c.ReadOnly, c.SortOrder, formatTime(c.UpdatedAt), c.ID)
+		c.Database, ssl, ssh, opts, c.ReadOnly, c.SortOrder, passwordState(c.PasswordState),
+		formatTime(c.UpdatedAt), c.ID)
 	if err != nil {
 		return Connection{}, fmt.Errorf("update connection %s: %w", c.ID, err)
 	}
@@ -136,6 +143,26 @@ func (r *Connections) Delete(ctx context.Context, id string) error {
 	return expectOneRow(res, "delete connection "+id)
 }
 
+// Arrange puts the connections ids, in that order, into the group groupID
+// ("" for no group), as one change. Connections not listed keep their place.
+// It leaves UpdatedAt alone: moving a connection does not edit it.
+func (r *Connections) Arrange(ctx context.Context, groupID string, ids []string) error {
+	return r.s.inTx(ctx, "arrange connections", func(tx *sql.Tx) error {
+		for i, id := range ids {
+			res, err := tx.ExecContext(ctx,
+				`UPDATE connections SET group_id = ?, sort_order = ? WHERE id = ?`,
+				nullIfEmpty(groupID), i, id)
+			if err != nil {
+				return err
+			}
+			if err := expectOneRow(res, "connection "+id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }
@@ -148,7 +175,8 @@ func scanConnection(row scanner) (Connection, error) {
 		created, updated string
 	)
 	err := row.Scan(&c.ID, &groupID, &c.Name, &c.Engine, &c.Env, &c.Color, &c.Host, &c.Port,
-		&c.Username, &c.Database, &ssl, &ssh, &opts, &c.ReadOnly, &c.SortOrder, &created, &updated)
+		&c.Username, &c.Database, &ssl, &ssh, &opts, &c.ReadOnly, &c.SortOrder, &c.PasswordState,
+		&created, &updated)
 	if err != nil {
 		return Connection{}, err
 	}
@@ -183,6 +211,13 @@ func connectionJSON(c Connection) (ssl, ssh, opts string, err error) {
 		*f.out = string(raw)
 	}
 	return ssl, ssh, opts, nil
+}
+
+func passwordState(s string) string {
+	if s == "" {
+		return "none" // the column's default
+	}
+	return s
 }
 
 func nullIfEmpty(s string) sql.NullString {

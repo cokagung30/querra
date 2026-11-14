@@ -9,16 +9,19 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/cokagung30/querra/internal/driver"
 )
@@ -30,6 +33,45 @@ func TestRegistered(t *testing.T) {
 	}
 	if _, ok := d.(Driver); !ok {
 		t.Fatalf("Lookup(postgres) = %T, want postgres.Driver", d)
+	}
+}
+
+func TestMarkErr(t *testing.T) {
+	refusedTLS := errors.New("server refused TLS connection")
+	pgErr := func(code string) error { return &pgconn.PgError{Severity: "FATAL", Code: code, Message: "m"} }
+
+	tests := []struct {
+		name string
+		err  error
+		want []error
+	}{
+		{"wrong password", pgErr("28P01"), []error{driver.ErrAuthFailed}},
+		{"no pg_hba entry", pgErr("28000"), []error{driver.ErrAuthFailed}},
+		{"no database", pgErr("3D000"), []error{driver.ErrDatabaseNotFound}},
+		{"no connect privilege", pgErr("42501"), []error{driver.ErrPermissionDenied}},
+		{"TLS refused", refusedTLS, []error{driver.ErrTLSRefused}},
+		{
+			// sslmode=prefer: the TLS attempt was refused, the plain one failed to log in.
+			"prefer fallback",
+			fmt.Errorf("failed to connect: %w", errors.Join(refusedTLS, pgErr("28P01"))),
+			[]error{driver.ErrAuthFailed, driver.ErrTLSRefused},
+		},
+		{"other server error", pgErr("53300"), nil},
+		{"network error", &net.OpError{Op: "dial", Err: errors.New("boom")}, nil},
+	}
+	all := []error{driver.ErrAuthFailed, driver.ErrDatabaseNotFound, driver.ErrPermissionDenied, driver.ErrTLSRefused}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := markErr(tt.err)
+			if !errors.Is(got, tt.err) || got.Error() != tt.err.Error() {
+				t.Fatalf("markErr() = %v, want it to wrap %v with the same message", got, tt.err)
+			}
+			for _, mark := range all {
+				if want := slices.Contains(tt.want, mark); errors.Is(got, mark) != want {
+					t.Errorf("errors.Is(markErr(), %v) = %v, want %v", mark, !want, want)
+				}
+			}
+		})
 	}
 }
 
