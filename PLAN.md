@@ -266,7 +266,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Waktu mulai (median 330 ms), memori idle (76–138 MB), dan ukuran DMG universal (14 MB) di macOS. Windows: median 599 ms, idle 159 MB, installer NSIS 7,7 MB. Peluncuran pertama setelah build baru di Windows 2,4–2,8 dtk, hampir seluruhnya sebelum Go mulai (kemungkinan pemindaian Defender; laporan §4.6).
   - [x] Pembatalan: `CancellablePromise` → ctx Go → query berhenti, untuk PostgreSQL dan MySQL. Hasilnya mengoreksi §3.8.
   - [x] `go-keyring` di macOS: tidak ada prompt setelah build ulang ad-hoc, tapi proses lain bisa ikut membaca (keputusan di laporan §7). Windows memakai Credential Manager, yang teruji tidak langsung lewat build CI.
-  - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway, termasuk dengan Smart App Control aktif). *Windows selesai 8 November 2026: installer bertanda "diunduh dari internet" langsung terbuka setelah UAC, tanpa SmartScreen dan tanpa blokir Smart App Control (laporan §4.7). Mac lain belum.*
+  - [ ] Build tanpa tanda tangan berbayar dibuka di Mac lain (Open Anyway) dan di Windows (SmartScreen → Run anyway, termasuk dengan Smart App Control aktif). *Windows 8 November 2026: installer bertanda "diunduh dari internet" langsung terbuka setelah UAC, tanpa SmartScreen dan tanpa blokir Smart App Control. **14 November 2026: build CI dan Querra hasil instalasi 8 November diblokir Smart App Control** (laporan §4.7). Windows lalu didistribusikan lewat Microsoft Store (§8.1, M0.5). Mac lain belum.*
   - [ ] Tampilan Tailwind v4 di macOS 12 (R3). *Manual, butuh perangkat macOS 12.*
   - [x] **Gerbang keputusan (final, macOS dan Windows):** lanjut dengan TanStack Table v9 + TanStack Virtual dan dengan Wails v3.
 - [ ] **M0.3 Shell UI dan fondasi desain** — *selesai dan diuji manual di macOS (semua langkah ✅; startup median 337 ms, idle 83 MB) dan Windows (startup median 706 ms, idle 130 MB; laporan `docs/spikes/fase-0.md` §8); tinggal tujuh langkah kecil di Windows dan B12b di macOS (checklist di `docs/test/M0.3.md`)*
@@ -281,6 +281,12 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] Tanpa lisensi open source: README menyatakan hak cipta pribadi dan bahwa Querra tidak untuk diperdagangkan (dikerjakan bersama M0.1).
   - [x] Repositori `cokagung30/querra` dibuat publik (8 November 2026), jadi rilis auto-update memakai GitHub Releases di repo ini (§8.1).
   - [x] Ikon aplikasi dari logo Querra (`build/icon-src/`): squircle navy untuk macOS (termasuk ikon Icon Composer macOS 26), logo transparan untuk Windows, serta ikon dan background DMG tanpa branding Wails.
+- [ ] **M0.5 Spike distribusi Windows lewat Microsoft Store** (keputusan §8.1, R10)
+  - [ ] Pemilik: akun developer Microsoft Store (Individual atau Company; jenisnya tidak bisa diubah kemudian), verifikasi identitas, dan reservasi nama aplikasi di Partner Center.
+  - [x] Identitas paket dari Partner Center dicatat di `build/windows/msix/app_manifest.xml`: `BaliDigitalKarya.Querra`, `CN=D674B8A2-7FFA-4BFB-AFD0-709702A95026`, "Bali Digital Karya". Nilai ini publik, bukan rahasia. Manifest dirawat manual dan dipasang lewat `--manifest`, karena tanpa flag itu Wails membuat manifest sendiri dari `config.yml`. Ikon diambil dari `build/icon-src/logo.png` (`--icon`).
+  - [ ] Paket MSIX dari Wails (`wails3 task windows:create:msix:package`, MakeAppx dari Windows SDK) di CI, ikut artifact `querra-windows` sebagai `querra-amd64.msix`. *Langkah CI sudah ada, belum pernah jalan.* Cek dampak container MSIX: lokasi `querra.db` (`%AppData%` divirtualisasi), Credential Manager, data WebView2, dan uninstall.
+  - [ ] Submission pertama sebagai listing tersembunyi atau private audience. Kebutuhan sertifikasi Store (mis. kebijakan privasi) dicek di sini.
+  - Selesai jika versi Store terpasang dan berjalan di PC Windows dengan Smart App Control aktif, lalu sisa uji M0.3 Windows dijalankan di versi itu.
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
 
@@ -288,12 +294,12 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] `store` (`internal/store`): buka atau buat database di direktori config (`DefaultPath`), migrasi ter-embed (`migrations/NNNN_*.sql`, satu transaksi per migrasi, menolak skema dari versi Querra yang lebih baru), serta repositori `Groups`, `Connections`, dan `Settings`. Pragma per koneksi: `foreign_keys`, WAL, `busy_timeout`; satu koneksi pool. Migrasi `0001` hanya berisi tabel M1.1; `known_hosts`, `query_history`, dan `snippets` ditambahkan oleh migrasi milestone yang membutuhkannya (M2.7, M2.6, M4.3). Kolom `database` menjadi `database_name`, karena `DATABASE` adalah kata kunci SQLite. Belum dipasang ke `main.go`; layanan koneksi (M1.3) yang membukanya.
   - [x] `secrets` (`internal/secrets`): interface `Store`, implementasi keyring (`Keyring`, go-keyring v0.2.8), dan fake in-memory (`Memory`) yang memvalidasi persis sama (id koneksi, jenis rahasia, nilai maksimal 1.024 byte; pesan error tidak pernah memuat nilai rahasia).
   - [x] Unit test untuk migrasi dan repositori (file SQLite sementara, termasuk path dengan spasi) dan kontrak `secrets` (fake dan provider mock go-keyring). Smoke test opsional ke keychain sungguhan: `go test -tags keychain ./internal/secrets -run TestKeychainSmoke -v`; di Windows Credential Manager lulus pada 8 November 2026.
-- [ ] **M1.2 Kontrak driver dan adapter PostgreSQL** — *kode selesai 14 November 2026; unit test `internal/driver/postgres` dan uji integrasinya belum pernah dijalankan, karena Smart App Control memblokir biner Go di PC Windows. Menunggu CI dan Mac (checklist di `docs/test/M1.2.md`)*
+- [ ] **M1.2 Kontrak driver dan adapter PostgreSQL** — *selesai 14 November 2026; CI hijau (unit test di macOS dan Windows, integrasi PostgreSQL 17). Di PC Windows tes Go tidak bisa jalan karena Smart App Control. Tinggal uji integrasi lokal di Mac dengan PostgreSQL 18 (checklist di `docs/test/M1.2.md`)*
   - [x] Interface §3.3 dan registry driver (`internal/driver`). `Driver` mendapat `Codec` untuk §3.5. `Dialect` baru berisi `QuoteIdent`, `Placeholder`, dan `ReadOnlySessionSQL`; `BuildSelect` menyusul di M1.7 dan `BuildChange` di M3.2.
   - [x] Open dengan opsi SSL (`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, CA, sertifikat dan key klien), konfigurasi pool, `application_name=Querra`. Semuanya lewat parser libpq milik pgx, jadi perilakunya sama dengan psql. Password tidak pernah masuk connection string, dan `PGPASSWORD`/`~/.pgpass` tidak ikut terpakai. Mode eksekusi `DescribeExec`: tanpa cache prepared statement (aman lewat PgBouncer dan setelah DDL), dan argumen string diberi tipe oleh server. Pembatalan memakai cancel request (§3.8). Setiap sesi editor punya pool satu koneksi sendiri, sehingga `SET`, transaksi, dan temp table tidak bocor ke pool bersama.
   - [x] Introspector berbasis `pg_catalog`: database, schema (TOAST dan temp disembunyikan, `pg_catalog`/`information_schema` ditandai sistem), tabel (termasuk partitioned dan foreign table; partisi tidak didaftar), view, materialized view, fungsi dan procedure (dengan signature), kolom (tipe, `kind`, nullable, default, komentar), PK, index (termasuk ekspresi), FK (aksi ON UPDATE/DELETE), constraint unique/check/exclusion, dan estimasi baris (`reltuples`, -1 bila belum ada statistik). Katalog yang dipakai butuh PostgreSQL 11+.
   - [x] Pemetaan tipe PG ke `kind` dan konversi nilai ke string (§3.5). Teks keluaran PostgreSQL sendiri dipertahankan (numeric, json, interval, array, …); float mengikuti format PG 12+; bytea menjadi `0x…`; timestamptz ditampilkan di zona waktu lokal.
-  - [ ] Uji integrasi terhadap PostgreSQL (lokal dan CI, §5): `internal/driver/postgres/integration_test.go` (koneksi, SSL, sesi tahan pembatalan, read-only, introspeksi seed, nilai semua kolom `all_types`). *Ditulis, belum dijalankan.*
+  - [ ] Uji integrasi terhadap PostgreSQL (lokal dan CI, §5): `internal/driver/postgres/integration_test.go` (koneksi, SSL, sesi tahan pembatalan, read-only, introspeksi seed, nilai semua kolom `all_types`). *Lulus di CI (PostgreSQL 17); Mac (PostgreSQL 18) belum.*
 - [ ] **M1.3 Layanan koneksi** (FR-01, FR-03, FR-04, FR-05)
   - CRUD, duplikasi, grup, pengurutan, environment (Local/Staging/Production) dan warna, flag hanya-baca.
   - Test Connection bertahap dengan pesan error yang mudah dipahami (§3.9).
@@ -389,14 +395,15 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - Audit i18n (tidak ada string hardcoded) dan audit navigasi keyboard penuh.
 - [ ] **M4.6 Packaging dan distribusi**
   - macOS: universal binary (arm64 + amd64) dengan ad-hoc signing (`codesign -s -`), lalu `.dmg`. Tanpa notarization (§8.2).
-  - Windows: installer NSIS tanpa tanda tangan, dengan bootstrapper WebView2 untuk Windows 10.
-  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke GitHub Releases (§8.1); anggaran ukuran (< 60 MB) dicek otomatis.
-  - Checklist rilis (`docs/test/v<versi>.md`): installer dari GitHub Releases diunduh, diinstal, dan dibuka di PC Windows dengan Smart App Control aktif sebelum rilis dibagikan (R10). Bila diblokir, rilis ditahan.
+  - Windows: paket MSIX untuk Microsoft Store (pola dari spike M0.5), dikirim ke Partner Center dari workflow rilis. Installer NSIS tanpa tanda tangan, dengan bootstrapper WebView2 untuk Windows 10, tetap dibuat sebagai artifact CI untuk PC tanpa Smart App Control.
+  - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak macOS diunggah ke GitHub Releases (§8.1); anggaran ukuran (< 60 MB) dicek otomatis.
+  - Checklist rilis (`docs/test/v<versi>.md`): versi Store dipasang dan dibuka di PC Windows dengan Smart App Control aktif sebelum dibagikan (R10). Bila diblokir, rilis ditahan.
 - [ ] **M4.7 Auto-update**
   - Jalankan `wails3 updater genkey` sekali saja. `updater.key` hanya disimpan di secret CI dan cadangan offline, tidak pernah di-commit; `updater.key.pub` di-embed ke aplikasi.
   - CI membuat manifest bertanda tangan (`wails3 updater manifest`) dan memverifikasinya (`wails3 updater verify`) sebelum diunggah.
   - Di aplikasi: cek pembaruan saat start (bisa dimatikan di settings) dan lewat menu, lalu tampilkan catatan rilis. Pengguna yang memutuskan kapan memasang. Pembaruan tidak dipasang selagi ada perubahan tertunda atau query yang berjalan.
-  - Uji alur pembaruan pada build ad-hoc-signed di macOS dan build tanpa tanda tangan di Windows.
+  - Di Windows, pembaruan diurus Microsoft Store (§8.1), jadi updater Wails dan pemeriksaan pembaruannya hanya aktif di build macOS.
+  - Uji alur pembaruan pada build ad-hoc-signed di macOS, dan pembaruan versi Store di Windows.
 - [ ] **M4.8 Performa dan keandalan**
   - Ukur ulang anggaran di §6 pada perangkat acuan; profil memori dengan pprof; analisis bundle (editor dan grid di-code-split).
   - Log ke file dan menu "Open Logs Folder" untuk melampirkan log saat melaporkan masalah.
@@ -467,7 +474,7 @@ Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1
 | R7 | Sebagian Windows 10 belum punya WebView2 | Bootstrapper WebView2 di installer |
 | R8 | Batas ukuran rahasia di Credential Manager | Simpan path private key, bukan isinya |
 | R9 | Waktu verifikasi di Windows terbatas karena pengembangan utama di macOS | PC Windows 11 sungguhan tersedia sejak 8 November 2026 (dipakai untuk pengukuran M0.2), build CI di setiap push, checklist QA per fase |
-| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru. Di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan tanpa pilihan "Run anyway" | Diuji di M0.2: di PC Windows uji dengan Smart App Control aktif, installer hanya memicu UAC (laporan §4.7); peringatan browser saat mengunduh diuji di M4.6. Smart App Control menilai setiap biner sendiri-sendiri: pada 14 November 2026, di PC yang sama, `wails3.exe` dan installer lolos, sementara biner tes Go, `vet.exe`, dan `gopls.exe` diblokir. Lolos sekali tidak menjamin versi berikutnya, jadi **setiap build rilis diinstal dan dibuka dulu di PC Windows dengan Smart App Control aktif sebelum dibagikan** (M4.6). Smart App Control di PC itu tetap dinyalakan, karena tidak bisa diaktifkan lagi tanpa instal ulang Windows. Panduan instalasi (B.3); pertimbangkan Apple Developer Program atau sertifikat Windows bila pemakai bertambah atau Smart App Control memblokir di PC lain |
+| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru. Di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan tanpa pilihan "Run anyway" | Diuji di M0.2: di PC Windows uji dengan Smart App Control aktif, installer hanya memicu UAC (laporan §4.7); peringatan browser saat mengunduh diuji di M4.6. Smart App Control menilai setiap biner sendiri-sendiri: pada 14 November 2026, di PC yang sama, `wails3.exe` dan installer lolos, sementara biner tes Go, `vet.exe`, dan `gopls.exe` diblokir. Lolos sekali tidak menjamin versi berikutnya, jadi **setiap build rilis diinstal dan dibuka dulu di PC Windows dengan Smart App Control aktif sebelum dibagikan** (M4.6). **Risiko ini terjadi pada 14 November 2026:** build CI (installer dan exe) diblokir, begitu juga Querra hasil instalasi 8 November yang sebelumnya berjalan (laporan §4.7). Karena itu Windows didistribusikan lewat Microsoft Store dengan paket MSIX yang ditandatangani Microsoft (§8.1, spike M0.5). Smart App Control di PC itu tetap dinyalakan, karena tidak bisa diaktifkan lagi tanpa instal ulang Windows. Panduan instalasi (B.3); pertimbangkan Apple Developer Program bila Gatekeeper makin ketat |
 | R11 | Kunci privat updater bocor, sehingga pihak lain bisa menerbitkan pembaruan palsu | Kunci hanya di secret CI dan cadangan offline, tidak pernah di repositori |
 
 ## 8. Keputusan
@@ -483,12 +490,13 @@ Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1
 | Target pengguna awal | Pemilik dan rekan dekat | Beta menjadi uji internal (§4.6); metrik PRD §11 disesuaikan |
 | Auto-update di v1? | Ya | Milestone M4.7, memakai updater bawaan Wails v3 dengan rilis bertanda tangan |
 | Visibilitas repositori dan lokasi rilis | Repositori `cokagung30/querra` publik; rilis lewat GitHub Releases di repo itu | M4.6 dan M4.7; aplikasi tidak perlu token GitHub |
+| Distribusi Windows (diputuskan 14 November 2026, R10) | Lewat **Microsoft Store** sebagai paket MSIX. Akun developer gratis, dan Store menandatangani paketnya, sehingga Smart App Control dan SmartScreen tidak memblokir. Pilihan lain yang ditimbang: sertifikat OV berbayar, Azure Artifact Signing (individu hanya AS/Kanada), atau tetap tanpa tanda tangan | Spike M0.5; M4.6 (paket MSIX untuk Store; installer NSIS tanpa tanda tangan tetap jadi artifact CI untuk PC tanpa Smart App Control); M4.7 (di Windows pembaruan lewat Store, updater Wails hanya untuk macOS) |
 
 ### 8.2 Mengikuti Rekomendasi (Bisa Diubah)
 
 | Pertanyaan | Rekomendasi yang dipakai | Alasan |
 | --- | --- | --- |
-| Code signing dan notarization berbayar | Tidak di v1: macOS memakai ad-hoc signing, installer Windows tanpa tanda tangan | Pemakai sedikit dan saling kenal, jadi biaya Apple Developer Program dan sertifikat Windows tidak sebanding. Ditinjau ulang bila distribusi diperluas (R10). |
+| Code signing dan notarization berbayar | Tidak di v1: macOS memakai ad-hoc signing; Windows ditandatangani gratis oleh Microsoft Store (§8.1) | Pemakai sedikit dan saling kenal, jadi biaya Apple Developer Program dan sertifikat berbayar tidak sebanding. Ditinjau ulang bila distribusi diperluas (R10). |
 | Crash reporting | Tanpa layanan crash reporting; log lokal + menu "Open Logs Folder" | Sejalan dengan larangan telemetri dan cukup untuk pemakai yang sedikit |
 
 ### 8.3 Masih Terbuka

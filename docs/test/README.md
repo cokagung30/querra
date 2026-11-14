@@ -11,7 +11,7 @@ Tes otomatis (`wails3 task test`, `test:integration`) tetap menjadi lapis utama.
 | [M0.2.md](M0.2.md) | Spike validasi stack (sisa uji manual) | ✅ | ⏳ |
 | [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ (sebagian ⏳) | ✅ (B12b ⏳) |
 | [M1.1.md](M1.1.md) | Penyimpanan lokal dan rahasia | ✅ | ⏳ |
-| [M1.2.md](M1.2.md) | Kontrak driver dan adapter PostgreSQL | ➖ (diblokir Smart App Control; diuji di CI) | ⏳ |
+| [M1.2.md](M1.2.md) | Kontrak driver dan adapter PostgreSQL | ➖ (diblokir Smart App Control); CI ✅ | ⏳ |
 
 Perbarui tabel ini setiap kali status sebuah file berubah.
 
@@ -35,7 +35,12 @@ Perbarui tabel ini setiap kali status sebuah file berubah.
 Di PC Windows dengan Smart App Control aktif, `wails3` dan biner Go buatan lokal bisa diblokir (PLAN R10). Karena itu uji manual di Windows memakai build dari CI. Setiap run CI yang hijau mengunggah build produksi Windows sebagai artifact `querra-windows`, yang tersimpan 14 hari.
 
 1. Buka repo di GitHub → **Actions** → workflow **CI**, lalu pilih run untuk commit yang mau diuji (harus hijau).
-2. Di bagian **Artifacts**, unduh `querra-windows` lewat browser (perlu login GitHub). Isinya `querra-amd64-installer.exe` (installer NSIS) dan `querra.exe` (bisa dijalankan tanpa instal).
+2. Di bagian **Artifacts**, unduh `querra-windows` lewat browser (perlu login GitHub). Isinya:
+   - `querra-amd64-installer.exe`: installer NSIS;
+   - `querra.exe`: bisa dijalankan tanpa instal;
+   - `querra-amd64.msix`: paket untuk diunggah ke Partner Center. Paket ini belum ditandatangani, jadi tidak bisa dipasang langsung. Microsoft menandatanganinya saat submission ke Store (PLAN M0.5).
+
+   Di PC dengan Smart App Control aktif, installer dan exe tanpa tanda tangan diblokir. Untuk PC seperti itu, pakai versi dari Microsoft Store.
 3. Ekstrak zip-nya lewat File Explorer, lalu jalankan installer seperti pengguna biasa.
 4. Catat apa yang muncul sebelum aplikasi terbuka (UAC, SmartScreen, atau blokir Smart App Control) di checklist milestone. Unduhan lewat browser ditandai "dari internet" seperti unduhan teman, jadi langkah ini sekaligus menguji R10. Kalau diblokir, tulis di **Temuan** dan beri tahu Claude.
 

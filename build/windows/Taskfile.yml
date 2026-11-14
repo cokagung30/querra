@@ -139,9 +139,14 @@ tasks:
     deps:
       - task: build
     cmds:
+      # Querra's own manifest carries the Microsoft Store identity, and the
+      # icon is the Windows logo; without these flags Wails generates a
+      # manifest from config.yml and uses its default icon.
       - |-
         wails3 tool msix \
           --config "{{.ROOT_DIR}}/build/config.yml" \
+          --manifest "{{.ROOT_DIR}}/build/windows/msix/app_manifest.xml" \
+          --icon "{{.ROOT_DIR}}/build/icon-src/logo.png" \
           --name "{{.APP_NAME}}.exe" \
           --executable "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" \
           --arch "{{.ARCH}}" \

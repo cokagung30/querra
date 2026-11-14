@@ -214,11 +214,29 @@ Temuan:
 - Penyebab SmartScreen dan Smart App Control tidak bereaksi belum diketahui. Hasilnya bisa berbeda di PC lain atau setelah Windows memperbarui reputasi file.
 - Unduhan lewat browser punya pemeriksaan tersendiri (SmartScreen di Edge atau Safe Browsing di Chrome, mis. peringatan "not commonly downloaded"). Ini baru bisa diuji dengan rilis GitHub sungguhan di M4.6, dan panduan instalasi (B.3) tetap perlu menjelaskan **Run anyway** untuk berjaga-jaga.
 
+#### Uji ulang 14 November 2026: diblokir
+
+Di PC yang sama, dengan Smart App Control tetap aktif, artifact `querra-windows` dari CI (commit `33176d5`, diunduh lewat browser) **diblokir Smart App Control**. Tidak ada pilihan untuk tetap menjalankannya. Log Code Integrity (event 3077) mencatat:
+
+| Waktu | File | Hasil |
+| --- | --- | --- |
+| 15:29:45 | `C:\Program Files\balikaryadigital.com\Querra\querra.exe`, hasil instalasi 8 November yang waktu itu berjalan normal | Diblokir |
+| 15:42:07 | `querra.exe` dari zip CI | Diblokir |
+| 15:42:14 | `querra-amd64-installer.exe` dari zip CI | Diblokir |
+
+Pada hari yang sama, Smart App Control mulai memblokir biner Go buatan lokal: biner tes, golangci-lint, `gopls`, dan sekitar pukul 15:17 juga `wails3.exe`, padahal pagi harinya masih jalan.
+
+Kesimpulan:
+
+- Lolos sekali tidak berarti aman. Penilaian Smart App Control untuk biner tanpa tanda tangan bisa berubah, bahkan untuk aplikasi yang sudah terinstal dan pernah berjalan.
+- Di PC dengan Smart App Control aktif, Querra tanpa tanda tangan praktis tidak bisa dipakai. Smart App Control tidak punya pengecualian per aplikasi, dan mematikannya tidak bisa dibatalkan tanpa instal ulang Windows.
+- Menurut dokumentasi Microsoft, Smart App Control mengizinkan aplikasi yang ditandatangani sertifikat dari CA di Microsoft Trusted Root Program, walaupun belum punya reputasi. Semua biner harus ditandatangani: exe, installer, dan uninstaller. Keputusannya (14 November 2026): Windows didistribusikan lewat Microsoft Store sebagai paket MSIX yang ditandatangani Microsoft (PLAN §8.1, spike M0.5).
+
 ## 5. Belum Diuji
 
 | Item | Yang perlu dilakukan | Oleh |
 | --- | --- | --- |
-| Installer yang diunduh lewat browser di Windows | Unduh installer dari rilis GitHub sungguhan (M4.6) dengan Edge dan Chrome, lalu catat peringatan browser dan SmartScreen. Uji dengan salinan bertanda `ZoneId=3` sudah lolos (§4.7) | Pemilik/rekan |
+| Installer yang diunduh lewat browser di Windows | Unduh installer dari rilis GitHub sungguhan (M4.6) dengan Edge dan Chrome, lalu catat peringatan browser dan SmartScreen. Dengan Smart App Control aktif, build tanpa tanda tangan diblokir sejak 14 November (§4.7) | Pemilik/rekan |
 | DMG tanpa notarization di Mac lain (Gatekeeper → Open Anyway) | Kirim `bin/querra.dmg` lewat AirDrop atau unduhan supaya mendapat atribut karantina, lalu buka di Mac lain | Pemilik/rekan |
 | Tailwind v4 di macOS 12 (R3) | Buka aplikasi di macOS 12. Jika tidak ada perangkat, risiko diterima dan diuji saat Beta | Pemilik |
 
