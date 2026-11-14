@@ -6,6 +6,7 @@
     "claude-md-management@claude-plugins-official": true,
     "superpowers@anthropic-plugin-directory": true,
     "ui-ux-pro-max@ui-ux-pro-max-skill": true,
-    "ponytail@ponytail": true
+    "ponytail@ponytail": true,
+    "github@anthropic-plugin-directory": true
   }
 }

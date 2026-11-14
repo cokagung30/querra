@@ -47,7 +47,35 @@ jobs:
         run: wails3 task test
 
       - name: Build
+        if: runner.os == 'macOS'
         run: wails3 build
+
+      - name: Install NSIS if missing
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          "C:\Program Files (x86)\NSIS" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      # Production exe plus NSIS installer, the same build `wails3 build` makes.
+      - name: Build app and installer
+        if: runner.os == 'Windows'
+        run: wails3 task package
+
+      # For manual checks on a Windows PC that can't build from source, e.g.
+      # with Smart App Control on (docs/test/README.md, PLAN R10).
+      - name: Upload Windows build
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: querra-windows
+          path: |
+            bin/querra-amd64-installer.exe
+            bin/querra.exe
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Check generated files are committed
         if: runner.os == 'macOS'

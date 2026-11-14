@@ -130,8 +130,9 @@ const (
 // Driver adalah titik masuk satu engine; didaftarkan ke registry saat init.
 type Driver interface {
     Engine() Engine
-    Capabilities() Capabilities // mis. HasSchemas, MultiDatabase, SupportsReturning
+    Capabilities() Capabilities // Schemas, Databases, MaterializedViews, Returning
     Dialect() Dialect
+    Codec() Codec // kind per kolom hasil + nilai → teks (§3.5)
     Open(ctx context.Context, cfg Config, dial DialFunc) (Conn, error)
 }
 
@@ -162,11 +163,18 @@ type Introspector interface {
 type Dialect interface {
     QuoteIdent(name string) string
     Placeholder(n int) string                     // "$1" vs "?"
-    BuildSelect(q TableQuery) (string, []any)     // filter, sort, limit/offset
-    BuildChange(c RowChange) (string, []any)      // insert/update/delete satu baris
+    BuildSelect(q TableQuery) (string, []any)     // filter, sort, limit/offset (M1.7)
+    BuildChange(c RowChange) (string, []any)      // insert/update/delete satu baris (M3.2)
     ReadOnlySessionSQL() string
 }
+
+type Codec interface {
+    Column(ct *sql.ColumnType) ResultColumn // nama, tipe asli, kind
+    Format(col ResultColumn, v any) string  // nilai non-NULL → teks sel
+}
 ```
+
+Kode sebenarnya ada di `internal/driver` (M1.2). `driver.Columns` dan `driver.ScanRow` membaca `*sql.Rows` lewat `Codec` milik engine.
 
 Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang berdasarkan engine, kecuali lewat `Capabilities`.
 
@@ -280,12 +288,12 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - [x] `store` (`internal/store`): buka atau buat database di direktori config (`DefaultPath`), migrasi ter-embed (`migrations/NNNN_*.sql`, satu transaksi per migrasi, menolak skema dari versi Querra yang lebih baru), serta repositori `Groups`, `Connections`, dan `Settings`. Pragma per koneksi: `foreign_keys`, WAL, `busy_timeout`; satu koneksi pool. Migrasi `0001` hanya berisi tabel M1.1; `known_hosts`, `query_history`, dan `snippets` ditambahkan oleh migrasi milestone yang membutuhkannya (M2.7, M2.6, M4.3). Kolom `database` menjadi `database_name`, karena `DATABASE` adalah kata kunci SQLite. Belum dipasang ke `main.go`; layanan koneksi (M1.3) yang membukanya.
   - [x] `secrets` (`internal/secrets`): interface `Store`, implementasi keyring (`Keyring`, go-keyring v0.2.8), dan fake in-memory (`Memory`) yang memvalidasi persis sama (id koneksi, jenis rahasia, nilai maksimal 1.024 byte; pesan error tidak pernah memuat nilai rahasia).
   - [x] Unit test untuk migrasi dan repositori (file SQLite sementara, termasuk path dengan spasi) dan kontrak `secrets` (fake dan provider mock go-keyring). Smoke test opsional ke keychain sungguhan: `go test -tags keychain ./internal/secrets -run TestKeychainSmoke -v`; di Windows Credential Manager lulus pada 8 November 2026.
-- [ ] **M1.2 Kontrak driver dan adapter PostgreSQL**
-  - Interface §3.3 dan registry driver.
-  - Open dengan opsi SSL (`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, CA, sertifikat dan key klien), konfigurasi pool, `application_name=Querra`.
-  - Introspector berbasis `pg_catalog`: database, schema, tabel, view, materialized view, fungsi, kolom, PK, index, FK, constraint.
-  - Pemetaan tipe PG ke `kind` dan konversi nilai ke string (§3.5).
-  - Uji integrasi terhadap PostgreSQL (lokal dan CI, §5).
+- [ ] **M1.2 Kontrak driver dan adapter PostgreSQL** — *kode selesai 14 November 2026; unit test `internal/driver/postgres` dan uji integrasinya belum pernah dijalankan, karena Smart App Control memblokir biner Go di PC Windows. Menunggu CI dan Mac (checklist di `docs/test/M1.2.md`)*
+  - [x] Interface §3.3 dan registry driver (`internal/driver`). `Driver` mendapat `Codec` untuk §3.5. `Dialect` baru berisi `QuoteIdent`, `Placeholder`, dan `ReadOnlySessionSQL`; `BuildSelect` menyusul di M1.7 dan `BuildChange` di M3.2.
+  - [x] Open dengan opsi SSL (`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, CA, sertifikat dan key klien), konfigurasi pool, `application_name=Querra`. Semuanya lewat parser libpq milik pgx, jadi perilakunya sama dengan psql. Password tidak pernah masuk connection string, dan `PGPASSWORD`/`~/.pgpass` tidak ikut terpakai. Mode eksekusi `DescribeExec`: tanpa cache prepared statement (aman lewat PgBouncer dan setelah DDL), dan argumen string diberi tipe oleh server. Pembatalan memakai cancel request (§3.8). Setiap sesi editor punya pool satu koneksi sendiri, sehingga `SET`, transaksi, dan temp table tidak bocor ke pool bersama.
+  - [x] Introspector berbasis `pg_catalog`: database, schema (TOAST dan temp disembunyikan, `pg_catalog`/`information_schema` ditandai sistem), tabel (termasuk partitioned dan foreign table; partisi tidak didaftar), view, materialized view, fungsi dan procedure (dengan signature), kolom (tipe, `kind`, nullable, default, komentar), PK, index (termasuk ekspresi), FK (aksi ON UPDATE/DELETE), constraint unique/check/exclusion, dan estimasi baris (`reltuples`, -1 bila belum ada statistik). Katalog yang dipakai butuh PostgreSQL 11+.
+  - [x] Pemetaan tipe PG ke `kind` dan konversi nilai ke string (§3.5). Teks keluaran PostgreSQL sendiri dipertahankan (numeric, json, interval, array, …); float mengikuti format PG 12+; bytea menjadi `0x…`; timestamptz ditampilkan di zona waktu lokal.
+  - [ ] Uji integrasi terhadap PostgreSQL (lokal dan CI, §5): `internal/driver/postgres/integration_test.go` (koneksi, SSL, sesi tahan pembatalan, read-only, introspeksi seed, nilai semua kolom `all_types`). *Ditulis, belum dijalankan.*
 - [ ] **M1.3 Layanan koneksi** (FR-01, FR-03, FR-04, FR-05)
   - CRUD, duplikasi, grup, pengurutan, environment (Local/Staging/Production) dan warna, flag hanya-baca.
   - Test Connection bertahap dengan pesan error yang mudah dipahami (§3.9).
@@ -383,6 +391,7 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
   - macOS: universal binary (arm64 + amd64) dengan ad-hoc signing (`codesign -s -`), lalu `.dmg`. Tanpa notarization (§8.2).
   - Windows: installer NSIS tanpa tanda tangan, dengan bootstrapper WebView2 untuk Windows 10.
   - Workflow rilis GitHub Actions saat tag `v*` dibuat; artefak diunggah ke GitHub Releases (§8.1); anggaran ukuran (< 60 MB) dicek otomatis.
+  - Checklist rilis (`docs/test/v<versi>.md`): installer dari GitHub Releases diunduh, diinstal, dan dibuka di PC Windows dengan Smart App Control aktif sebelum rilis dibagikan (R10). Bila diblokir, rilis ditahan.
 - [ ] **M4.7 Auto-update**
   - Jalankan `wails3 updater genkey` sekali saja. `updater.key` hanya disimpan di secret CI dan cadangan offline, tidak pernah di-commit; `updater.key.pub` di-embed ke aplikasi.
   - CI membuat manifest bertanda tangan (`wails3 updater manifest`) dan memverifikasinya (`wails3 updater verify`) sebelum diunggah.
@@ -458,7 +467,7 @@ Alat ukur: `dev/perf/measure_macos.py` (macOS) dan `dev/perf/measure_windows.ps1
 | R7 | Sebagian Windows 10 belum punya WebView2 | Bootstrapper WebView2 di installer |
 | R8 | Batas ukuran rahasia di Credential Manager | Simpan path private key, bukan isinya |
 | R9 | Waktu verifikasi di Windows terbatas karena pengembangan utama di macOS | PC Windows 11 sungguhan tersedia sejak 8 November 2026 (dipakai untuk pengukuran M0.2), build CI di setiap push, checklist QA per fase |
-| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru. Di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan tanpa pilihan "Run anyway" | Diuji di M0.2: di PC Windows uji dengan Smart App Control aktif, installer hanya memicu UAC (laporan §4.7); peringatan browser saat mengunduh diuji di M4.6. Panduan instalasi (B.3); pertimbangkan Apple Developer Program atau sertifikat Windows bila pemakai bertambah atau Smart App Control memblokir di PC lain |
+| R10 | Build tanpa tanda tangan berbayar memicu peringatan Gatekeeper/SmartScreen, dan aturan Gatekeeper bisa makin ketat di versi macOS baru. Di Windows 11, Smart App Control bisa memblokir aplikasi tanpa tanda tangan tanpa pilihan "Run anyway" | Diuji di M0.2: di PC Windows uji dengan Smart App Control aktif, installer hanya memicu UAC (laporan §4.7); peringatan browser saat mengunduh diuji di M4.6. Smart App Control menilai setiap biner sendiri-sendiri: pada 14 November 2026, di PC yang sama, `wails3.exe` dan installer lolos, sementara biner tes Go, `vet.exe`, dan `gopls.exe` diblokir. Lolos sekali tidak menjamin versi berikutnya, jadi **setiap build rilis diinstal dan dibuka dulu di PC Windows dengan Smart App Control aktif sebelum dibagikan** (M4.6). Smart App Control di PC itu tetap dinyalakan, karena tidak bisa diaktifkan lagi tanpa instal ulang Windows. Panduan instalasi (B.3); pertimbangkan Apple Developer Program atau sertifikat Windows bila pemakai bertambah atau Smart App Control memblokir di PC lain |
 | R11 | Kunci privat updater bocor, sehingga pihak lain bisa menerbitkan pembaruan palsu | Kunci hanya di secret CI dan cadangan offline, tidak pernah di repositori |
 
 ## 8. Keputusan

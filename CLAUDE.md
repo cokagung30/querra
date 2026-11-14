@@ -68,7 +68,9 @@ internal/perf/, internal/app/perfservice.go, frontend/src/features/perf/
                       dev/perf autorun hooks (QUERRA_PERF_AUTORUN=startup|idle|grid); inert without
                       the env var, so release builds are what gets measured. Keep them working
 build/                Wails build config, icons, Info.plist, NSIS, signing
-.github/workflows/    CI: test + build on macOS and Windows; lint + stale generated-files check on macOS only
+.github/workflows/    CI: test + build on macOS and Windows; lint + stale generated-files check on macOS only;
+                      the Windows job uploads exe + NSIS installer as artifact `querra-windows`, which
+                      is how Windows manual checks get a build (docs/test/README.md)
 ```
 
 ## Architecture rules
@@ -120,6 +122,7 @@ Dependencies point one way: frontend → `frontend/bindings` → `internal/app` 
 ## Before saying a task is done
 
 - `wails3 task lint` and `wails3 task test` pass.
+- On a Windows machine with Smart App Control on, Windows can refuse to run unsigned Go-built binaries: test binaries, and also `wails3` and golangci-lint ("An Application Control policy has blocked this file"). That is not a test result, and rebuilding with other flags to slip past it is not a fix. Run what does start (`go vet`, `go build`, npm scripts), leave the rest to CI or the Mac, and say which ran where. Keep Smart App Control on: it can't be re-enabled without reinstalling Windows, and that PC is how releases get checked against it (PLAN R10).
 - If you touched drivers, session, query, changeset, export, or importer, run `wails3 task db:reset` and then `wails3 task test:integration`. Engines without a HOST in `dev/test.env` are skipped (locally there's no MariaDB). Say which engines actually ran, and leave the rest to CI's `integration` job; don't claim an engine was tested when it was skipped.
 - Integration tests get their connection from `QUERRA_DEV_<ENGINE>_HOST`/`_PORT` and log in as `querra_test`/`querra_test` to database `querra_test`. They must `t.Skip` when the HOST is empty, and must never create or modify anything outside `querra_test*`.
 - If you changed the UI, run `wails3 dev` and exercise the change. Say explicitly which platform wasn't verified, and put the steps for it in `docs/test/<milestone>.md` (copy `docs/test/_template.md` for a new milestone).
@@ -134,6 +137,7 @@ Startup < 2 s · idle memory < 250 MB (including webview processes) · smooth sc
 - WKWebView (macOS) and WebView2 (Windows) behave differently, so avoid experimental web APIs. Tailwind v4 targets Safari 16.4+, which matters for macOS 12 (PLAN R3).
 - MySQL: cancelling the ctx in go-sql-driver closes the connection, but the query keeps running on the server. The adapter cancels with `KILL QUERY` from another connection instead (PLAN §3.8). `mysql.RegisterDialContext` and `mysql.RegisterTLSConfig` are global registries, so use a unique name per connection.
 - PostgreSQL: one pool per database. Switching databases means opening a new pool.
+- PostgreSQL adapter (`internal/driver/postgres`): the password goes on the pgx config, never into a connection string. Queries run in `QueryExecModeDescribeExec` (no statement cache, so it works behind PgBouncer and after DDL, and string arguments are typed by the server). Each editor session has its own one-connection pool, so a session's connection never goes back to the shared pool with its `SET`s or open transaction. Cell text comes from `Codec`; pgx already returns most types as PostgreSQL's own text, so keep that text rather than reformatting it.
 - PostgreSQL cancellation: pgx's default context handler kills the connection on cancel. Always set `BuildContextWatcherHandler` to `pgconn.CancelRequestContextWatcherHandler` (with a `DeadlineDelay` fallback) so editor sessions survive a cancelled query (PLAN §3.8, measured in `docs/spikes/fase-0.md`).
 - `go-keyring` on macOS shells out to `/usr/bin/security`. There are no keychain prompts after updates, but any process of the same user can read the secrets. That trade-off is deliberate for v1 (`docs/spikes/fase-0.md` §7); don't swap in a native keychain library without revisiting that decision.
 - Node 25+ defines its own `localStorage` global, which is undefined unless Node runs with `--localstorage-file`, and it hides jsdom's in Vitest. Reach webview storage through `uiStorage` (`src/lib/storage.ts`), which falls back to memory. Keep it to UI state such as panel sizes; real settings go to the Go store.
