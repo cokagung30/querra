@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
@@ -91,17 +91,23 @@ export function AppShell() {
 }
 
 // useCollapsiblePanel keeps a collapsible panel and the store's collapsed flag
-// in step: the flag drives the panel, and dragging the panel closed (or open)
-// updates the flag.
+// in step. On mount the panel has restored its saved size, so the flag adopts
+// the panel's state. After that, changes to the flag drive the panel, and
+// dragging the panel closed (or open) updates the flag.
 function useCollapsiblePanel(collapsed: boolean, setCollapsed: (collapsed: boolean) => void) {
   const panelRef = usePanelRef()
+  // The flag value last handled here; undefined until the panel has mounted.
+  const handled = useRef<boolean | undefined>(undefined)
 
   useEffect(() => {
     const panel = panelRef.current
-    if (!panel) return
-    if (collapsed && !panel.isCollapsed()) panel.collapse()
+    if (!panel || handled.current === collapsed) return
+    const first = handled.current === undefined
+    handled.current = collapsed
+    if (first) setCollapsed(panel.isCollapsed())
+    else if (collapsed && !panel.isCollapsed()) panel.collapse()
     else if (!collapsed && panel.isCollapsed()) panel.expand()
-  }, [collapsed, panelRef])
+  }, [collapsed, panelRef, setCollapsed])
 
   const onResize = useCallback(() => {
     const panel = panelRef.current

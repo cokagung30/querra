@@ -9,7 +9,7 @@ Tes otomatis (`wails3 task test`, `test:integration`) tetap menjadi lapis utama.
 | File | Milestone | Windows | macOS |
 | --- | --- | --- | --- |
 | [M0.2.md](M0.2.md) | Spike validasi stack (sisa uji manual) | ✅ | ⏳ |
-| [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ (sebagian ⏳) | ✅ |
+| [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ (sebagian ⏳) | ✅ (B12b ⏳) |
 | [M1.1.md](M1.1.md) | Penyimpanan lokal dan rahasia | ✅ | ⏳ |
 
 Perbarui tabel ini setiap kali status sebuah file berubah.

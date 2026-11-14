@@ -1,0 +1,11 @@
+{
+  "enabledPlugins": {
+    "humanizer-blader@anthropic-plugin-directory": true,
+    "mattpocock-skills@claude-plugins-official": true,
+    "frontend-design@anthropic-plugin-directory": true,
+    "claude-md-management@claude-plugins-official": true,
+    "superpowers@anthropic-plugin-directory": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "ponytail@ponytail": true
+  }
+}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -68,6 +69,36 @@ func TestOpenMigratesAndReopens(t *testing.T) {
 	groups, err := s.Groups.List(ctx)
 	if err != nil || len(groups) != 1 {
 		t.Fatalf("groups after reopen = %v, %v; want the one created before", groups, err)
+	}
+}
+
+// Two Querra windows started at once on first run both migrate the same new
+// database; separate *sql.DB handles stand in for the two processes.
+func TestConcurrentOpensOfANewDatabase(t *testing.T) {
+	const opens = 4
+	for round := range 5 {
+		path := filepath.Join(t.TempDir(), "querra.db")
+		start := make(chan struct{})
+		errs := make(chan error, opens)
+		var wg sync.WaitGroup
+		for range opens {
+			wg.Go(func() {
+				<-start
+				s, err := Open(context.Background(), path)
+				if err == nil {
+					err = s.Close()
+				}
+				errs <- err
+			})
+		}
+		close(start)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("round %d: concurrent Open() error = %v", round, err)
+			}
+		}
 	}
 }
 
@@ -268,9 +299,15 @@ func TestConnectionDefaultsAndValidation(t *testing.T) {
 		t.Fatalf("defaults = ssl %s, ssh %s, options %s, group %q; want {} and no group", c.SSL, c.SSH, c.Options, c.GroupID)
 	}
 
-	_, err = s.Connections.Create(ctx, Connection{Name: "bad", Engine: "postgres", Env: "local", SSH: json.RawMessage(`{`)})
-	if err == nil || !strings.Contains(err.Error(), "ssh settings are not valid JSON") {
-		t.Fatalf("Create() with invalid JSON error = %v", err)
+	c, err = s.Connections.Create(ctx, Connection{Name: "null", Engine: "postgres", Env: "local", SSH: json.RawMessage(` null `)})
+	if err != nil || string(c.SSH) != "{}" {
+		t.Fatalf("Create() with null SSH settings = %s, %v; want {}", c.SSH, err)
+	}
+	for _, bad := range []string{`{`, `[]`, `1`, `"x"`, `{} {}`} {
+		_, err = s.Connections.Create(ctx, Connection{Name: "bad", Engine: "postgres", Env: "local", SSH: json.RawMessage(bad)})
+		if err == nil || !strings.Contains(err.Error(), "ssh settings must be a JSON object") {
+			t.Errorf("Create() with SSH settings %s: error = %v; want a JSON object error", bad, err)
+		}
 	}
 	_, err = s.Connections.Create(ctx, Connection{GroupID: "no-such-group", Name: "x", Engine: "postgres", Env: "local"})
 	if err == nil {

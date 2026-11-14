@@ -34,7 +34,7 @@ describe('installKeybindings', () => {
   it('runs the bound command and prevents the default action', () => {
     const event = press(document.body, { key: 't', code: 'KeyT', ctrlKey: true })
     expect(run).toHaveBeenCalledOnce()
-    expect(run).toHaveBeenCalledWith()
+    expect(run).toHaveBeenCalledWith(undefined) // keybindings pass no arg
     expect(event.defaultPrevented).toBe(true)
   })
 

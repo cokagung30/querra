@@ -19,7 +19,8 @@ import (
 	"path/filepath"
 	"time"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
+	"modernc.org/sqlite" // also registers the "sqlite" database/sql driver
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // ErrNotFound is returned when the requested record does not exist.
@@ -65,7 +66,7 @@ func open(ctx context.Context, path string, files fs.FS) (*Store, error) {
 	// one connection avoids SQLITE_BUSY between pooled connections.
 	db.SetMaxOpenConns(1)
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := connect(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open database %s: %w", path, err)
 	}
@@ -74,6 +75,27 @@ func open(ctx context.Context, path string, files fs.FS) (*Store, error) {
 		return nil, err
 	}
 	return newStore(db, time.Now), nil
+}
+
+// connect opens the first connection, which runs the dsn pragmas. When two
+// Querra processes switch the same new database to WAL at once, SQLite fails
+// one with SQLITE_BUSY right away instead of waiting busy_timeout. WAL mode is
+// stored in the file, so a retry finds it already set.
+func connect(ctx context.Context, db *sql.DB) error {
+	var err error
+	for attempt := 1; attempt <= 10; attempt++ {
+		var sqliteErr *sqlite.Error
+		err = db.PingContext(ctx)
+		if err == nil || !errors.As(err, &sqliteErr) || sqliteErr.Code()&0xff != sqlite3.SQLITE_BUSY {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * 10 * time.Millisecond):
+		}
+	}
+	return err
 }
 
 func newStore(db *sql.DB, now func() time.Time) *Store {
@@ -86,13 +108,18 @@ func newStore(db *sql.DB, now func() time.Time) *Store {
 
 // dsn builds the modernc.org/sqlite data source name. The path stays a plain
 // file name (not a file: URI), so spaces in it, as in many Windows user
-// folders, need no escaping. _pragma parameters run on every new connection.
+// folders, need no escaping. _pragma parameters run on every new connection,
+// in order: busy_timeout comes first so that switching to WAL waits for
+// another Querra process instead of failing. _txlock=immediate takes the write
+// lock when a transaction begins, so two writers queue up rather than one
+// failing with SQLITE_BUSY halfway through.
 func dsn(path string) string {
 	q := url.Values{}
+	q.Add("_pragma", "busy_timeout(5000)")
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(NORMAL)")
-	q.Add("_pragma", "busy_timeout(5000)")
+	q.Set("_txlock", "immediate")
 	return path + "?" + q.Encode()
 }
 

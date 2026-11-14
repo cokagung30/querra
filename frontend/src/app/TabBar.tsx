@@ -32,7 +32,6 @@ export function TabBar() {
 
 function TabItem({ tab, active }: { tab: Tab; active: boolean }) {
   const { t } = useTranslation()
-  const activate = useTabsStore((s) => s.activate)
   const title = t('tabs.query', { n: tab.seq })
 
   return (
@@ -50,7 +49,7 @@ function TabItem({ tab, active }: { tab: Tab; active: boolean }) {
         aria-selected={active}
         aria-controls="tab-panel"
         className="flex h-full max-w-48 items-center gap-1.5 pr-1 pl-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        onClick={() => activate(tab.id)}
+        onClick={() => commands.execute('tab.activate', tab.id)}
       >
         <FileCode className="size-3.5 shrink-0" aria-hidden />
         <span className="truncate">{title}</span>

@@ -19,6 +19,8 @@ const RESERVED: Record<Platform, string[]> = {
     'Cmd+X',
     'Cmd+C',
     'Cmd+V',
+    'Cmd+Alt+Shift+V', // Paste and Match Style
+    'Backspace', // Delete
     'Cmd+A',
   ],
   other: ['Alt+F4', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+A'],

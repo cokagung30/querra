@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -162,8 +163,8 @@ func scanConnection(row scanner) (Connection, error) {
 	return c, nil
 }
 
-// connectionJSON returns c's JSON columns, using {} for empty ones and
-// rejecting invalid JSON.
+// connectionJSON returns c's JSON columns, using {} for empty or null ones and
+// rejecting anything that is not a JSON object.
 func connectionJSON(c Connection) (ssl, ssh, opts string, err error) {
 	fields := []struct {
 		name string
@@ -171,14 +172,15 @@ func connectionJSON(c Connection) (ssl, ssh, opts string, err error) {
 		out  *string
 	}{{"ssl", c.SSL, &ssl}, {"ssh", c.SSH, &ssh}, {"options", c.Options, &opts}}
 	for _, f := range fields {
-		if len(f.raw) == 0 {
+		raw := bytes.TrimSpace(f.raw)
+		if len(raw) == 0 || string(raw) == "null" {
 			*f.out = "{}"
 			continue
 		}
-		if !json.Valid(f.raw) {
-			return "", "", "", fmt.Errorf("%s settings are not valid JSON", f.name)
+		if raw[0] != '{' || !json.Valid(raw) {
+			return "", "", "", fmt.Errorf("%s settings must be a JSON object", f.name)
 		}
-		*f.out = string(f.raw)
+		*f.out = string(raw)
 	}
 	return ssl, ssh, opts, nil
 }

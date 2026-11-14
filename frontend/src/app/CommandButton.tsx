@@ -1,5 +1,4 @@
 import type { LucideIcon } from 'lucide-react'
-import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -26,7 +25,7 @@ export function CommandButton({
   className,
 }: CommandButtonProps) {
   const { t } = useTranslation()
-  useSyncExternalStore(commands.subscribe, commands.getVersion)
+  // Also re-renders when commands change, which keeps commands.get current.
   const keybinding = useKeybindingLabel(commandId)
   const command = commands.get(commandId)
   if (!command) return null

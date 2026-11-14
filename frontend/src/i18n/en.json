@@ -11,6 +11,7 @@
     "tab": {
       "new": "New Query Tab",
       "close": "Close Tab",
+      "activate": "Switch to Tab",
       "next": "Next Tab",
       "previous": "Previous Tab"
     }

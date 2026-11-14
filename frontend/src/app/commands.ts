@@ -3,7 +3,7 @@ import { useLayoutStore } from '@/stores/layout'
 import { useTabsStore } from '@/stores/tabs'
 
 // Default keybindings avoid what the OS or the macOS menu (internal/app/menu.go)
-// already takes: Mod+Q, Mod+H, Mod+M, and the Edit menu's Mod+Z/X/C/V/A.
+// already takes; commands.test.ts lists those keys.
 export function registerShellCommands(registry: CommandRegistry = defaultRegistry): () => void {
   const tabs = () => useTabsStore.getState()
   const layout = () => useLayoutStore.getState()
@@ -36,6 +36,14 @@ export function registerShellCommands(registry: CommandRegistry = defaultRegistr
       // A tab's close button passes its id; the keybinding closes the active tab.
       run: (tabId) => tabs().closeTab(typeof tabId === 'string' ? tabId : undefined),
       isEnabled: () => tabs().tabs.length > 0,
+    }),
+    registry.register({
+      id: 'tab.activate',
+      titleKey: 'commands.tab.activate',
+      // Run by clicking a tab, which passes its id; no default keybinding.
+      run: (tabId) => {
+        if (typeof tabId === 'string') tabs().activate(tabId)
+      },
     }),
     registry.register({
       id: 'tab.next',

@@ -20,10 +20,7 @@ export function installKeybindings(registry: CommandRegistry, target: Window = w
     if (isTextField(event.target) && !chord.ctrl && !chord.alt && !chord.meta) return
 
     const command = registry.commandForChord(chord)
-    if (!command || (command.isEnabled && !command.isEnabled())) return
-
-    event.preventDefault()
-    command.run()
+    if (command && registry.execute(command.id)) event.preventDefault()
   }
 
   target.addEventListener('keydown', onKeyDown)

@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Kbd } from '@/components/ui/kbd'
@@ -53,7 +52,7 @@ function Welcome() {
 
 function ShortcutRow({ commandId }: { commandId: string }) {
   const { t } = useTranslation()
-  useSyncExternalStore(commands.subscribe, commands.getVersion)
+  // Also re-renders when commands change, which keeps commands.get current.
   const keybinding = useKeybindingLabel(commandId)
   const command = commands.get(commandId)
   if (!command || !keybinding) return null

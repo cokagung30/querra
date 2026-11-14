@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { commands, installKeybindings } from '@/lib/commands'
+import { uiStorage } from '@/lib/storage'
 import { useLayoutStore } from '@/stores/layout'
 import { resetTabsStore } from '@/stores/tabs'
 
@@ -14,6 +15,9 @@ vi.mock('./api', () => ({
 vi.mock('@/features/perf/api', () => ({
   ready: vi.fn().mockResolvedValue(''),
 }))
+
+// Where useDefaultLayout keeps the sidebar | work layout (AppShell's id).
+const MAIN_LAYOUT_KEY = 'react-resizable-panels:querra.shell.main'
 
 // The shell commands use the app-wide registry, as in main.tsx.
 const mod = commands.platform === 'mac' ? { metaKey: true } : { ctrlKey: true }
@@ -35,6 +39,7 @@ describe('App shell', () => {
 
   afterEach(() => {
     cleanup.forEach((fn) => fn())
+    uiStorage.setItem(MAIN_LAYOUT_KEY, '{}')
   })
 
   it('shows the layout regions and the version reported by the backend', async () => {
@@ -66,6 +71,14 @@ describe('App shell', () => {
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Query 2'])
   })
 
+  it('switches tabs by clicking them', () => {
+    render(<App />)
+    press({ key: 't', code: 'KeyT', ...mod })
+    press({ key: 't', code: 'KeyT', ...mod })
+    fireEvent.click(screen.getByRole('tab', { name: 'Query 1' }))
+    expect(screen.getByRole('tab', { name: 'Query 1' })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('closes a tab with its close button', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'New Query Tab' }))
@@ -85,5 +98,16 @@ describe('App shell', () => {
 
     fireEvent.click(toggle)
     expect(useLayoutStore.getState().sidebarCollapsed).toBe(false)
+  })
+
+  it('keeps a panel closed that was dragged closed before the last quit', () => {
+    // The layout react-resizable-panels saved after the user dragged the sidebar shut.
+    uiStorage.setItem(MAIN_LAYOUT_KEY, JSON.stringify({ 'sidebar,work': { layout: [0, 100] } }))
+    render(<App />)
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(true)
+    expect(screen.getByRole('button', { name: 'Toggle Sidebar' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 })

@@ -15,6 +15,7 @@ Querra is a lightweight desktop database client (PostgreSQL, MySQL/MariaDB, SQLi
 - Language: PLAN.md and the PRD are Indonesian; code, comments, commit messages, and UI strings are English.
 - Commit messages: Conventional Commits with the milestone code, e.g. `feat(grid): M1.7 server-side pagination`.
 - Manual and cross-platform checks live in `docs/test/<milestone>.md` (Indonesian, one file per milestone, a result column per platform; the flow is in `docs/test/README.md`). The owner develops on both Windows and macOS and continues work on the other machine through these files. When they say they're testing or continuing on another platform, read the milestone's file first, especially its "Konteks untuk Claude" section. Record reported results there, and tick PLAN.md only once every platform passes.
+- Plugin skills (Superpowers, mattpocock-skills, …) run inside this workflow. PLAN.md and the PRD are the spec and the plan: design decisions and milestone plans go there, never into separate files such as `docs/superpowers/`. Work in the main checkout on `main`, and commit only when the owner asks. Brainstorm only what PLAN.md leaves open, and put those questions to the owner.
 
 ## Stack
 

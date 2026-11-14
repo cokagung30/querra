@@ -94,6 +94,9 @@ func migrate(ctx context.Context, db *sql.DB, files fs.FS) error {
 	return nil
 }
 
+// applyMigration applies m unless another Querra process did so first: the
+// transaction holds the write lock (_txlock=immediate in dsn), and the version
+// is checked again under it.
 func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -101,6 +104,13 @@ func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
 
+	var current int
+	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return err
+	}
+	if current >= m.version {
+		return nil
+	}
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 		return err
 	}
