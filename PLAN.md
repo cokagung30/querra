@@ -199,7 +199,7 @@ Engine baru cukup mengimplementasikan interface ini. UI tidak boleh bercabang be
 | Tabel | Isi |
 | --- | --- |
 | `connection_groups` | `id, name, sort_order` |
-| `connections` | `id (uuid), group_id, name, engine, env, color, host, port, username, database, ssl_json, ssh_json, options_json, read_only, sort_order, created_at, updated_at`; **tanpa rahasia** |
+| `connections` | `id (uuid), group_id, name, engine, env, color, host, port, username, database_name, ssl_json, ssh_json, options_json, read_only, sort_order, created_at, updated_at`; **tanpa rahasia** |
 | `known_hosts` | `host, port, key_type, fingerprint_sha256, added_at` |
 | `query_history` | `id, connection_id, database, sql, started_at, duration_ms, row_count, status, error`; diindeks per koneksi dan waktu; ada retensi |
 | `snippets` | `id, name, sql, engine (nullable), tags, created_at, updated_at` |
@@ -276,10 +276,10 @@ Catatan: mode hanya-baca melindungi dari *kesalahan*, bukan kontrol akses. Pengg
 
 ### 4.2 Fase 1 – Koneksi, Penjelajah, Grid Baca-saja untuk PostgreSQL (±4 minggu)
 
-- [ ] **M1.1 Penyimpanan lokal dan rahasia**
-  - `store`: buka atau buat database di direktori config, migrasi ter-embed, repositori untuk koneksi, grup, dan settings.
-  - `secrets`: interface `Store`, implementasi keyring, dan fake in-memory untuk pengujian.
-  - Unit test untuk migrasi dan repositori (memakai file SQLite sementara).
+- [ ] **M1.1 Penyimpanan lokal dan rahasia** — *selesai di Windows; menunggu smoke test keychain di macOS (checklist di `docs/test/M1.1.md`)*
+  - [x] `store` (`internal/store`): buka atau buat database di direktori config (`DefaultPath`), migrasi ter-embed (`migrations/NNNN_*.sql`, satu transaksi per migrasi, menolak skema dari versi Querra yang lebih baru), serta repositori `Groups`, `Connections`, dan `Settings`. Pragma per koneksi: `foreign_keys`, WAL, `busy_timeout`; satu koneksi pool. Migrasi `0001` hanya berisi tabel M1.1; `known_hosts`, `query_history`, dan `snippets` ditambahkan oleh migrasi milestone yang membutuhkannya (M2.7, M2.6, M4.3). Kolom `database` menjadi `database_name`, karena `DATABASE` adalah kata kunci SQLite. Belum dipasang ke `main.go`; layanan koneksi (M1.3) yang membukanya.
+  - [x] `secrets` (`internal/secrets`): interface `Store`, implementasi keyring (`Keyring`, go-keyring v0.2.8), dan fake in-memory (`Memory`) yang memvalidasi persis sama (id koneksi, jenis rahasia, nilai maksimal 1.024 byte; pesan error tidak pernah memuat nilai rahasia).
+  - [x] Unit test untuk migrasi dan repositori (file SQLite sementara, termasuk path dengan spasi) dan kontrak `secrets` (fake dan provider mock go-keyring). Smoke test opsional ke keychain sungguhan: `go test -tags keychain ./internal/secrets -run TestKeychainSmoke -v`; di Windows Credential Manager lulus pada 8 November 2026.
 - [ ] **M1.2 Kontrak driver dan adapter PostgreSQL**
   - Interface §3.3 dan registry driver.
   - Open dengan opsi SSL (`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, CA, sertifikat dan key klien), konfigurasi pool, `application_name=Querra`.

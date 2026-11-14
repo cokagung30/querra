@@ -93,7 +93,7 @@ Dependencies point one way: frontend → `frontend/bindings` → `internal/app` 
 - Logs must not contain secrets, DSNs with passwords, or row data.
 - No network traffic except to the DB/SSH hosts the user configured, plus the update check (Wails v3 updater). The update check sends only version and platform, and the user can turn it off. No telemetry.
 - The updater signing key (`updater.key`) lives only in CI secrets and an offline backup. Never commit it; only `updater.key.pub` is embedded in the app.
-- Tests use the in-memory fake from `internal/secrets`, never the real keychain.
+- Tests use the in-memory fake from `internal/secrets` (`secrets.NewMemory()`), never the real keychain. The one exception is the opt-in smoke test (`go test -tags keychain ./internal/secrets -run TestKeychainSmoke -v`). It writes dummy values under the separate service `com.balikaryadigital.querra.smoke-test` and deletes them, and it's run by hand once per platform.
 - `dev/test.env` holds local admin credentials for the test database servers. It's git-ignored: never commit it, print it, or copy its values anywhere else.
 
 ## Go conventions
@@ -137,6 +137,7 @@ Startup < 2 s · idle memory < 250 MB (including webview processes) · smooth sc
 - `go-keyring` on macOS shells out to `/usr/bin/security`. There are no keychain prompts after updates, but any process of the same user can read the secrets. That trade-off is deliberate for v1 (`docs/spikes/fase-0.md` §7); don't swap in a native keychain library without revisiting that decision.
 - Node 25+ defines its own `localStorage` global, which is undefined unless Node runs with `--localstorage-file`, and it hides jsdom's in Vitest. Reach webview storage through `uiStorage` (`src/lib/storage.ts`), which falls back to memory. Keep it to UI state such as panel sizes; real settings go to the Go store.
 - Keep the build cgo-free on Windows: modernc.org/sqlite is pure Go, so don't introduce cgo-based drivers.
+- Local store (`internal/store`): never edit a shipped migration; add `migrations/NNNN_name.sql` with the next number. A table belongs to the migration of the milestone that first needs it. `PRAGMA user_version` is the schema version, and `Open` refuses a database from a newer Querra (`ErrNewerSchema`). Pass the path to modernc.org/sqlite as a plain file name, not a `file:` URI, because Windows user folders often contain spaces.
 - Release builds are ad-hoc signed on macOS (not notarized) and unsigned on Windows, so Gatekeeper and SmartScreen warnings are expected. Don't add build or release steps that assume a paid signing identity unless PLAN §8 changes.
 - Pin Wails and the Go toolchain. New Go releases can raise the minimum macOS version, and the PRD requires macOS 12.
 - `go.mod` has `ignore ./frontend/node_modules`, because some npm packages ship Go code. Keep it, or `./...` will test, lint, and `go mod tidy` code inside node_modules.
