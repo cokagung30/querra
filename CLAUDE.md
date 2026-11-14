@@ -5,7 +5,7 @@ Querra is a lightweight desktop database client (PostgreSQL, MySQL/MariaDB, SQLi
 - Identity: Go module `github.com/cokagung30/querra`, bundle ID `com.balikaryadigital.querra`.
 - Requirements: `docs/PRD Querra – Database Management Client.md` (Indonesian)
 - Architecture, milestones, decisions: `PLAN.md` (Indonesian). Section refs like "PLAN §3.7" point there.
-- Status: Phase 0 (M0.1–M0.4) is in place; PLAN.md tracks what's done and what still awaits manual checks. Folders under Layout that don't exist yet get created by the milestone that needs them.
+- Status: Phase 0 (M0.1–M0.5) is in place, and Windows ships through the Microsoft Store; PLAN.md tracks what's done and what still awaits manual checks. Folders under Layout that don't exist yet get created by the milestone that needs them.
 
 ## Working agreement
 
@@ -147,6 +147,7 @@ Startup < 2 s · idle memory < 250 MB (including webview processes) · smooth sc
 - Local store (`internal/store`): never edit a shipped migration; add `migrations/NNNN_name.sql` with the next number. A table belongs to the migration of the milestone that first needs it. `PRAGMA user_version` is the schema version, and `Open` refuses a database from a newer Querra (`ErrNewerSchema`). Pass the path to modernc.org/sqlite as a plain file name, not a `file:` URI, because Windows user folders often contain spaces.
 - Release builds are ad-hoc signed on macOS (not notarized), so Gatekeeper warnings are expected. Windows releases go through the Microsoft Store as MSIX, which Microsoft signs for free (PLAN §8.1, spike M0.5): unsigned Windows builds get blocked outright by Smart App Control, even after they once ran. The unsigned NSIS installer remains only as a CI artifact. Don't add build or release steps that assume a paid signing identity unless PLAN §8 changes.
 - `build/windows/msix/app_manifest.xml` is hand-maintained and carries the Store identity from Partner Center (`BaliDigitalKarya.Querra`, its `CN=…` publisher, "Bali Digital Karya"); it must match Partner Center exactly. `common:update:build-assets` overwrites it, so restore it from git afterwards. Each Store submission needs a higher `Identity/@Version` whose last part stays 0.
+- In the Store (MSIX) build, Windows redirects writes under `%AppData%` to `%LocalAppData%\Packages\BaliDigitalKarya.Querra_m596njqrn6kpj\LocalCache\Roaming\`, so `querra.db` and the WebView2 profile live there, and uninstall deletes them. To confirm the Store app really launched or was blocked without taking screenshots, read the `Microsoft-Windows-AppModel-Runtime/Admin` log (event 201 "Created process … Querra") and `Microsoft-Windows-CodeIntegrity/Operational`.
 - Pin Wails and the Go toolchain. New Go releases can raise the minimum macOS version, and the PRD requires macOS 12.
 - `go.mod` has `ignore ./frontend/node_modules`, because some npm packages ship Go code. Keep it, or `./...` will test, lint, and `go mod tidy` code inside node_modules.
 - `main.go` embeds `frontend/dist`, so Go builds, tests, and lint fail on a fresh clone until the frontend has been built. The `lint` and `test` tasks build it first; if you call `go test` directly, run `wails3 task common:build:frontend` once.

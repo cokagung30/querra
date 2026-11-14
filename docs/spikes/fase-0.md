@@ -232,6 +232,25 @@ Kesimpulan:
 - Di PC dengan Smart App Control aktif, Querra tanpa tanda tangan praktis tidak bisa dipakai. Smart App Control tidak punya pengecualian per aplikasi, dan mematikannya tidak bisa dibatalkan tanpa instal ulang Windows.
 - Menurut dokumentasi Microsoft, Smart App Control mengizinkan aplikasi yang ditandatangani sertifikat dari CA di Microsoft Trusted Root Program, walaupun belum punya reputasi. Semua biner harus ditandatangani: exe, installer, dan uninstaller. Keputusannya (14 November 2026): Windows didistribusikan lewat Microsoft Store sebagai paket MSIX yang ditandatangani Microsoft (PLAN §8.1, spike M0.5).
 
+#### Microsoft Store, 14 November 2026: lulus
+
+Ini spike M0.5, diuji di PC yang sama dengan Smart App Control tetap aktif. Paket `querra-amd64.msix` versi `0.1.0.0` (commit `4b95a92`) dikirim ke Partner Center sebagai private audience dan lulus sertifikasi pada hari yang sama. Querra lalu dipasang dari tautan privat lewat aplikasi Microsoft Store (checklist `docs/test/M0.5.md`).
+
+| Langkah | Hasil |
+| --- | --- |
+| Instalasi | Tidak ada SmartScreen, UAC, maupun blokir Smart App Control. Paketnya ditandatangani Store (`SignatureKind` Store) |
+| Peluncuran | Tercatat tujuh peluncuran antara 20:26 dan 21:27 (log `AppModel-Runtime/Admin`, event 201), termasuk setelah uninstall dan pasang ulang. Log Code Integrity tidak mencatat blokir |
+| Shell M0.3 | Sisa uji Windows (B5b, B7, B10, B12, B12b, B13, B14) lulus |
+| Data aplikasi | Tulisan ke `%AppData%` dialihkan ke `%LocalAppData%\Packages\BaliDigitalKarya.Querra_m596njqrn6kpj\LocalCache\Roaming\`. Profil WebView2 ada di `querra.exe\EBWebView` di folder itu, dan `%AppData%\querra.exe` tidak dibuat |
+| Uninstall | Paket, folder data, dan entri Start menu terhapus semua. Setelah dipasang ulang, ukuran panel kembali ke bawaan |
+
+Kesimpulan:
+
+- Jalur Store mengatasi R10 di Windows: paket yang ditandatangani Microsoft lolos Smart App Control di PC yang memblokir build tanpa tanda tangan.
+- Uninstall versi Store bersih. Folder data versi NSIS (`%AppData%\querra.exe`) masih tertinggal setelah versi itu tidak terpasang lagi.
+- `querra.db` (M1.3) akan berada di `…\LocalCache\Roaming\Querra\querra.db`, bukan di `%AppData%\Querra`. Cek `querra.db` dan Credential Manager di dalam container dikerjakan pada build Store pertama yang punya UI koneksi (PLAN M1.4).
+- Setiap submission berikutnya butuh `Identity/@Version` yang lebih tinggi. Partner Center sudah menyiapkan draft *Product update* (Submission 2) untuk itu.
+
 ## 5. Belum Diuji
 
 | Item | Yang perlu dilakukan | Oleh |
@@ -247,7 +266,7 @@ Kesimpulan:
 - **PLAN §3.6:** catatan perilaku `go-keyring` di macOS dan keputusan backend keychain (di bawah).
 - **PLAN M1.7:** prefetch halaman searah scroll untuk mengurangi baris kosong saat scroll sangat cepat. Kalibrasi di Windows, karena `FetchRows` di sana ±3× lebih lambat.
 - **PLAN §6:** memori idle Windows (159 MB) dicek setiap milestone UI, dan peluncuran pertama setelah pembaruan di Windows (2,4–2,8 dtk) diukur lagi di M4.8.
-- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka. **R10:** di PC uji, Smart App Control dan SmartScreen tidak memblokir installer tanpa tanda tangan (§4.7); peringatan browser saat mengunduh diuji di M4.6.
+- **Risiko R2:** dimitigasi dan terbukti. **R3:** masih terbuka. **R10:** terjadi pada 14 November 2026, ketika build tanpa tanda tangan diblokir Smart App Control. Risiko ini diatasi lewat Microsoft Store (§4.7, spike M0.5). Peringatan browser saat mengunduh DMG atau installer NSIS diuji di M4.6.
 
 ## 7. Keputusan untuk Pemilik
 

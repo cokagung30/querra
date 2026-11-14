@@ -45,10 +45,10 @@ func validSettings() Settings {
 }
 
 var (
-	keep     = PasswordChange{Action: PasswordKeep}
-	clearPw  = PasswordChange{Action: PasswordClear}
-	setPw    = func(v string) PasswordChange { return PasswordChange{Action: PasswordSet, Value: v} }
-	keychain = errors.New("keychain unavailable")
+	keep        = PasswordChange{Action: PasswordKeep}
+	clearPw     = PasswordChange{Action: PasswordClear}
+	setPw       = func(v string) PasswordChange { return PasswordChange{Action: PasswordSet, Value: v} }
+	errKeychain = errors.New("keychain unavailable")
 )
 
 // wantField checks that err is an ErrInvalid for the given field.
@@ -210,21 +210,21 @@ type failingSecrets struct {
 
 func (f *failingSecrets) Set(id string, kind secrets.Kind, v string) error {
 	if f.set {
-		return keychain
+		return errKeychain
 	}
 	return f.Store.Set(id, kind, v)
 }
 
 func (f *failingSecrets) Delete(id string, kind secrets.Kind) error {
 	if f.del {
-		return keychain
+		return errKeychain
 	}
 	return f.Store.Delete(id, kind)
 }
 
 func (f *failingSecrets) DeleteAll(id string) error {
 	if f.del {
-		return keychain
+		return errKeychain
 	}
 	return f.Store.DeleteAll(id)
 }
@@ -234,7 +234,7 @@ func TestCreateUndoesTheConnectionWhenTheKeychainFails(t *testing.T) {
 	svc, mem := newTestService(t)
 	svc.secrets = &failingSecrets{Store: mem, set: true}
 
-	if _, err := svc.Create(ctx, validSettings(), setPw("s3cret")); !errors.Is(err, keychain) {
+	if _, err := svc.Create(ctx, validSettings(), setPw("s3cret")); !errors.Is(err, errKeychain) {
 		t.Fatalf("Create() error = %v, want the keychain error", err)
 	}
 	if list, _ := svc.List(ctx); len(list) != 0 {
@@ -313,7 +313,7 @@ func TestUpdateChangesNothingWhenTheKeychainFails(t *testing.T) {
 	s := c.Settings
 	s.Name = "Renamed"
 	for _, pw := range []PasswordChange{setPw("new"), clearPw} {
-		if _, err := svc.Update(ctx, c.ID, s, pw); !errors.Is(err, keychain) {
+		if _, err := svc.Update(ctx, c.ID, s, pw); !errors.Is(err, errKeychain) {
 			t.Fatalf("Update(%s) error = %v, want the keychain error", pw.Action, err)
 		}
 	}
@@ -335,7 +335,7 @@ func TestDelete(t *testing.T) {
 
 	failing := &failingSecrets{Store: mem, del: true}
 	svc.secrets = failing
-	if err := svc.Delete(ctx, c.ID); !errors.Is(err, keychain) {
+	if err := svc.Delete(ctx, c.ID); !errors.Is(err, errKeychain) {
 		t.Fatalf("Delete() with a failing keychain = %v, want the keychain error", err)
 	}
 	if _, err := svc.Get(ctx, c.ID); err != nil {
@@ -410,7 +410,7 @@ func TestDuplicateUndoesTheCopyWhenTheKeychainFails(t *testing.T) {
 	a, _ := svc.Create(ctx, validSettings(), setPw("s3cret"))
 	svc.secrets = &failingSecrets{Store: mem, set: true}
 
-	if _, err := svc.Duplicate(ctx, a.ID, "Copy"); !errors.Is(err, keychain) {
+	if _, err := svc.Duplicate(ctx, a.ID, "Copy"); !errors.Is(err, errKeychain) {
 		t.Fatalf("Duplicate() error = %v, want the keychain error", err)
 	}
 	if list, _ := svc.List(ctx); len(list) != 1 {
