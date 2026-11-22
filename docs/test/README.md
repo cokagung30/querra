@@ -9,11 +9,11 @@ Tes otomatis (`wails3 task test`, `test:integration`) tetap menjadi lapis utama.
 | File | Milestone | Windows | macOS |
 | --- | --- | --- | --- |
 | [M0.2.md](M0.2.md) | Spike validasi stack (sisa uji manual) | ✅ | ⏳ |
-| [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ | ✅ (B12b ⏳) |
+| [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ | ✅ |
 | [M0.5.md](M0.5.md) | Distribusi Windows lewat Microsoft Store | ✅ | ➖ |
-| [M1.3.md](M1.3.md) | Layanan koneksi | ➖ (domain dibuat di sini; tes lewat CI) | ⏳ (lapisan Wails) |
-| [M1.1.md](M1.1.md) | Penyimpanan lokal dan rahasia | ✅ | ⏳ |
-| [M1.2.md](M1.2.md) | Kontrak driver dan adapter PostgreSQL | ➖ (diblokir Smart App Control); CI ✅ | ⏳ |
+| [M1.3.md](M1.3.md) | Layanan koneksi | ➖ (domain dibuat di sini; tes lewat CI) | ✅ (lapisan Wails; tinggal CI commit-nya) |
+| [M1.1.md](M1.1.md) | Penyimpanan lokal dan rahasia | ✅ | ✅ |
+| [M1.2.md](M1.2.md) | Kontrak driver dan adapter PostgreSQL | ➖ (diblokir Smart App Control); CI ✅ | ✅ |
 
 Perbarui tabel ini setiap kali status sebuah file berubah.
 
