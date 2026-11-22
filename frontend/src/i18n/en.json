@@ -3,6 +3,13 @@
     "name": "Querra",
     "tagline": "Lightweight database client"
   },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "create": "Create",
+    "delete": "Delete",
+    "save": "Save"
+  },
   "commands": {
     "view": {
       "toggleSidebar": "Toggle Sidebar",
@@ -14,6 +21,17 @@
       "activate": "Switch to Tab",
       "next": "Next Tab",
       "previous": "Previous Tab"
+    },
+    "connection": {
+      "new": "New Connection",
+      "edit": "Edit Connection…",
+      "duplicate": "Duplicate Connection",
+      "delete": "Delete Connection…"
+    },
+    "group": {
+      "new": "New Group…",
+      "rename": "Rename Group…",
+      "delete": "Delete Group…"
     }
   },
   "sidebar": {
@@ -21,12 +39,139 @@
     "empty": "No connections yet",
     "emptyHint": "Saved connections will appear here."
   },
+  "connections": {
+    "search": "Search connections",
+    "noGroup": "No group",
+    "noMatches": "No connections match “{{filter}}”.",
+    "env": {
+      "local": "local",
+      "staging": "staging",
+      "production": "PROD"
+    },
+    "readOnly": "Read-only",
+    "passwordRequired": "Password required",
+    "dismiss": "Dismiss",
+    "drag": {
+      "instructions": "To pick up a connection or group, press Space. Use the arrow keys to move it, then press Space to drop it, or Escape to cancel.",
+      "start": "Picked up {{name}}.",
+      "over": "{{name}} is over {{target}}.",
+      "end": "Dropped {{name}}.",
+      "cancel": "Moving {{name}} was cancelled."
+    },
+    "more": "More connection actions",
+    "moveTo": "Move to Group",
+    "copyName": "{{name}} (copy)",
+    "confirm": {
+      "connectionTitle": "Delete “{{name}}”?",
+      "connectionBody": "The connection and its saved password are removed. This can’t be undone.",
+      "groupTitle": "Delete group “{{name}}”?",
+      "groupBody_zero": "The group is empty.",
+      "groupBody_one": "Its connection moves to “No group”.",
+      "groupBody_other": "Its {{count}} connections move to “No group”."
+    },
+    "groups": {
+      "newTitle": "New Group",
+      "renameTitle": "Rename Group",
+      "name": "Name"
+    },
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL / MariaDB",
+      "sqlite": "SQLite"
+    },
+    "colors": {
+      "auto": "Environment color",
+      "red": "Red",
+      "orange": "Orange",
+      "yellow": "Yellow",
+      "green": "Green",
+      "teal": "Teal",
+      "blue": "Blue",
+      "purple": "Purple",
+      "gray": "Gray"
+    },
+    "form": {
+      "newTitle": "New Connection",
+      "editTitle": "Edit Connection",
+      "description": "Connection settings. The password is stored in your system keychain.",
+      "tabs": {
+        "general": "General",
+        "ssl": "SSL",
+        "ssh": "SSH",
+        "advanced": "Advanced"
+      },
+      "soon": "Soon",
+      "engine": "Engine",
+      "name": "Name",
+      "env": "Environment",
+      "envs": {
+        "local": "Local",
+        "staging": "Staging",
+        "production": "Production"
+      },
+      "prodReadOnly": "Read-only is on for Production (Advanced tab).",
+      "color": "Color",
+      "group": "Group",
+      "host": "Host",
+      "port": "Port",
+      "user": "User",
+      "password": "Password",
+      "database": "Database",
+      "passwordSaved": "Saved in keychain — leave empty to keep",
+      "passwordRequired": "Not saved",
+      "passwordCleared": "Removed when you save",
+      "clear": "Clear",
+      "undo": "Undo",
+      "clearPassword": "Clear password",
+      "keepPassword": "Keep saved password",
+      "sslMode": "Mode",
+      "sslModes": {
+        "disable": "Disable",
+        "prefer": "Prefer",
+        "require": "Require",
+        "verify-ca": "Verify CA",
+        "verify-full": "Verify full"
+      },
+      "caFile": "CA certificate",
+      "certFile": "Client certificate",
+      "keyFile": "Client key",
+      "browse": "Browse…",
+      "browseFor": "Browse for {{label}}",
+      "readOnly": "Read-only",
+      "readOnlyHint": "Every session of this connection is read-only. This guards against mistakes, not against a user who can write: for that, use a database user without write rights."
+    },
+    "test": {
+      "run": "Test Connection",
+      "cancel": "Cancel test",
+      "running": "Testing the connection…",
+      "stages": {
+        "tcp": "TCP",
+        "tls": "TLS",
+        "auth": "Login",
+        "ping": "Ping"
+      },
+      "skipped": "skipped",
+      "notRun": "not run",
+      "duration": "{{ms}} ms",
+      "ok": "Connected.",
+      "okVersion": "Connected to {{version}}.",
+      "tls": "TLS",
+      "noTls": "No TLS"
+    },
+    "discard": {
+      "title": "Discard changes?",
+      "body": "Your changes to this connection haven’t been saved.",
+      "keep": "Keep editing",
+      "discard": "Discard"
+    }
+  },
   "tabs": {
     "label": "Open tabs",
     "query": "Query {{n}}",
     "close": "Close {{title}}"
   },
   "welcome": {
+    "label": "Welcome",
     "shortcuts": "Keyboard shortcuts"
   },
   "query": {

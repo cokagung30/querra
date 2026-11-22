@@ -1,5 +1,7 @@
+import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { commands, useKeybindingLabel } from '@/lib/commands'
 import { useTabsStore } from '@/stores/tabs'
@@ -27,11 +29,20 @@ export function ContentArea() {
 
 function Welcome() {
   const { t } = useTranslation()
+  const newKeybinding = useKeybindingLabel('connection.new')
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-8 p-6">
-      <div className="text-center">
+    <section
+      aria-label={t('welcome.label')}
+      className="flex h-full flex-col items-center justify-center gap-8 p-6"
+    >
+      <div className="flex flex-col items-center text-center">
         <h1 className="text-2xl font-semibold tracking-tight">{t('app.name')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t('app.tagline')}</p>
+        <Button className="mt-5" onClick={() => commands.execute('connection.new')}>
+          <Plus aria-hidden />
+          {t('commands.connection.new')}
+          {newKeybinding && <Kbd className="ml-1">{newKeybinding}</Kbd>}
+        </Button>
       </div>
       <section aria-labelledby="welcome-shortcuts" className="flex flex-col items-center gap-3">
         <h2
@@ -46,7 +57,7 @@ function Welcome() {
           ))}
         </dl>
       </section>
-    </div>
+    </section>
   )
 }
 

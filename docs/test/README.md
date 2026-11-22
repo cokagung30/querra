@@ -12,6 +12,7 @@ Tes otomatis (`wails3 task test`, `test:integration`) tetap menjadi lapis utama.
 | [M0.3.md](M0.3.md) | Shell UI dan fondasi desain | ✅ | ✅ |
 | [M0.5.md](M0.5.md) | Distribusi Windows lewat Microsoft Store | ✅ | ➖ |
 | [M1.3.md](M1.3.md) | Layanan koneksi | ➖ (domain dibuat di sini; tes lewat CI) | ✅ (lapisan Wails) |
+| [M1.4.md](M1.4.md) | UI koneksi | ⏳ (kode dan pratinjau di sini; aplikasi lewat build Store) | ⏳ (ekspor/impor dan uji aplikasi) |
 | [M1.1.md](M1.1.md) | Penyimpanan lokal dan rahasia | ✅ | ✅ |
 | [M1.2.md](M1.2.md) | Kontrak driver dan adapter PostgreSQL | ➖ (diblokir Smart App Control); CI ✅ | ✅ |
 

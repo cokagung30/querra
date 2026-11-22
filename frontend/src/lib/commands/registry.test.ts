@@ -44,6 +44,16 @@ describe('CommandRegistry', () => {
     expect(registry.execute('missing')).toBe(false)
   })
 
+  it('lets isEnabled depend on the argument', () => {
+    const registry = new CommandRegistry('other')
+    // e.g. Delete from the keyboard needs a focused list; a menu names its item.
+    const cmd = command('connection.delete', undefined, { isEnabled: (arg) => arg !== undefined })
+    registry.register(cmd)
+
+    expect(registry.execute('connection.delete')).toBe(false)
+    expect(registry.execute('connection.delete', 'shop')).toBe(true)
+  })
+
   it('applies overrides, including unbinding', () => {
     const registry = new CommandRegistry('mac')
     const newTab = command('tab.new', 'Mod+T')

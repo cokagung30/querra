@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { registerConnectionCommands } from '@/features/connections/commands'
 import { commands, installKeybindings } from '@/lib/commands'
 import { uiStorage } from '@/lib/storage'
+import { resetConnectionsStore, useConnectionsStore } from '@/stores/connections'
 import { useLayoutStore } from '@/stores/layout'
 import { resetTabsStore } from '@/stores/tabs'
 
@@ -11,6 +13,12 @@ import { registerShellCommands } from './commands'
 
 vi.mock('./api', () => ({
   getAppInfo: vi.fn().mockResolvedValue({ name: 'Querra', version: '1.2.3' }),
+}))
+vi.mock('@/features/connections/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/connections/api')>()),
+  listConnections: vi.fn().mockResolvedValue([]),
+  listGroups: vi.fn().mockResolvedValue([]),
+  listEngines: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('@/features/perf/api', () => ({
   ready: vi.fn().mockResolvedValue(''),
@@ -33,8 +41,13 @@ describe('App shell', () => {
 
   beforeEach(() => {
     resetTabsStore()
+    resetConnectionsStore()
     useLayoutStore.setState({ sidebarCollapsed: false, resultsCollapsed: false })
-    cleanup = [registerShellCommands(commands), installKeybindings(commands)]
+    cleanup = [
+      registerShellCommands(commands),
+      registerConnectionCommands(commands),
+      installKeybindings(commands),
+    ]
   })
 
   afterEach(() => {
@@ -55,6 +68,17 @@ describe('App shell', () => {
     render(<App />)
     const shortcuts = screen.getByRole('region', { name: 'Keyboard shortcuts' })
     expect(within(shortcuts).getByText('New Query Tab')).toBeInTheDocument()
+  })
+
+  it('starts a new connection from the welcome screen or the keyboard', () => {
+    render(<App />)
+    const welcome = screen.getByRole('region', { name: 'Welcome' })
+    fireEvent.click(within(welcome).getByRole('button', { name: /^New Connection/ }))
+    expect(useConnectionsStore.getState().dialog).toEqual({ mode: 'new' })
+
+    useConnectionsStore.getState().closeDialog()
+    press({ key: 'n', ...mod })
+    expect(useConnectionsStore.getState().dialog).toEqual({ mode: 'new' })
   })
 
   it('opens, switches and closes tabs from the keyboard', () => {

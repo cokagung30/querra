@@ -13,7 +13,8 @@ export interface Command {
   // arg is undefined when the command comes from a keybinding.
   run: (arg?: unknown) => void
   // Commands that are not enabled neither run nor swallow their keybinding.
-  isEnabled?: () => boolean
+  // It gets the same arg as run.
+  isEnabled?: (arg?: unknown) => boolean
 }
 
 // Keybinding overrides by command id; null unbinds the command.
@@ -63,7 +64,7 @@ export class CommandRegistry {
   // it ran.
   execute(id: string, arg?: unknown): boolean {
     const command = this.commands.get(id)
-    if (!command || (command.isEnabled && !command.isEnabled())) return false
+    if (!command || (command.isEnabled && !command.isEnabled(arg))) return false
     command.run(arg)
     return true
   }

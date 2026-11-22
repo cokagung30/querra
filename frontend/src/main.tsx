@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from '@/app/App'
 import { registerShellCommands } from '@/app/commands'
 import { followSystemTheme } from '@/app/theme'
+import { registerConnectionCommands } from '@/features/connections/commands'
 import { commands, installKeybindings } from '@/lib/commands'
 
 import '@/i18n'
@@ -13,6 +14,7 @@ import './index.css'
 // already has its theme and commands.
 followSystemTheme()
 registerShellCommands(commands)
+registerConnectionCommands(commands)
 installKeybindings(commands)
 
 createRoot(document.getElementById('root') as HTMLElement).render(

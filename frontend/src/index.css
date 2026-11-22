@@ -15,6 +15,9 @@
  * with a -foreground for text on top. Anywhere a connection appears, a
  * Production connection must carry env-production.
  *
+ * Connection colors (PLAN M1.3): conn-<color> for the palette a connection can
+ * pick instead of its environment color, used for its dot in the sidebar.
+ *
  * The monospace font (font-mono) is for the grid and the SQL editor.
  */
 @theme inline {
@@ -109,6 +112,14 @@
   --env-staging-foreground: oklch(0.205 0 0);
   --env-production: oklch(0.55 0.22 27);
   --env-production-foreground: oklch(0.985 0 0);
+  --conn-red: oklch(0.6 0.2 25);
+  --conn-orange: oklch(0.68 0.17 50);
+  --conn-yellow: oklch(0.8 0.15 90);
+  --conn-green: oklch(0.6 0.15 150);
+  --conn-teal: oklch(0.62 0.11 185);
+  --conn-blue: oklch(0.58 0.18 255);
+  --conn-purple: oklch(0.56 0.2 300);
+  --conn-gray: oklch(0.6 0 0);
   color-scheme: light;
 }
 
@@ -151,6 +162,14 @@
   --env-staging-foreground: oklch(0.205 0 0);
   --env-production: oklch(0.62 0.21 25);
   --env-production-foreground: oklch(0.985 0 0);
+  --conn-red: oklch(0.66 0.19 25);
+  --conn-orange: oklch(0.72 0.16 50);
+  --conn-yellow: oklch(0.83 0.14 90);
+  --conn-green: oklch(0.68 0.15 150);
+  --conn-teal: oklch(0.7 0.11 185);
+  --conn-blue: oklch(0.66 0.16 255);
+  --conn-purple: oklch(0.66 0.18 300);
+  --conn-gray: oklch(0.65 0 0);
 }
 
 @layer base {

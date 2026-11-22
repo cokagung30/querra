@@ -1,7 +1,10 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { lazy, Suspense } from 'react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConnectionDialogs } from '@/features/connections/ConnectionDialogs'
 import { usePerfAutorun } from '@/features/perf/usePerfAutorun'
+import { queryClient } from '@/lib/query'
 
 import { AppShell } from './AppShell'
 
@@ -13,13 +16,16 @@ export function App() {
   const perfMode = usePerfAutorun()
 
   return (
-    <TooltipProvider delayDuration={500}>
-      <AppShell />
-      {perfMode === 'grid' && (
-        <Suspense fallback={null}>
-          <PerfGridBench />
-        </Suspense>
-      )}
-    </TooltipProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider delayDuration={500}>
+        <AppShell />
+        <ConnectionDialogs />
+        {perfMode === 'grid' && (
+          <Suspense fallback={null}>
+            <PerfGridBench />
+          </Suspense>
+        )}
+      </TooltipProvider>
+    </QueryClientProvider>
   )
 }

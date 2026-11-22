@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { CommandRegistry, parseKeybinding, type Platform } from '@/lib/commands'
 import { chordId } from '@/lib/commands/keybinding'
 
+import { registerConnectionCommands } from '@/features/connections/commands'
+
 import { registerShellCommands } from './commands'
 
 // Taken by the OS or by the macOS menu in internal/app/menu.go, so a default
@@ -26,9 +28,10 @@ const RESERVED: Record<Platform, string[]> = {
   other: ['Alt+F4', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+A'],
 }
 
-describe.each<Platform>(['mac', 'other'])('shell commands on %s', (platform) => {
+describe.each<Platform>(['mac', 'other'])('app commands on %s', (platform) => {
   const registry = new CommandRegistry(platform)
   registerShellCommands(registry)
+  registerConnectionCommands(registry)
 
   it('have translated titles', () => {
     for (const command of registry.list()) {
