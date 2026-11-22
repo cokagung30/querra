@@ -81,6 +81,12 @@ func New(code Code, message string) *Error {
 	return &Error{Code: code, Message: message}
 }
 
+// WithDetail returns an error with the given code, that code's standard
+// message, and detail.
+func WithDetail(code Code, detail string) *Error {
+	return &Error{Code: code, Message: messages[code], Detail: detail}
+}
+
 // From turns any error into an *Error: an *Error inside err is returned as is,
 // a cancelled context becomes Cancelled, errors from reaching or logging in to
 // a database get their connection code (FromConnect), and anything else is

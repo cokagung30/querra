@@ -36,6 +36,8 @@ go env -w GOTOOLCHAIN=go1.26.2+auto  # go.mod's toolchain line is only a minimum
 wails3 doctor
 
 wails3 dev                       # run the app with hot reload
+EXTRA_TAGS=mcp wails3 dev        # same, plus Wails' MCP server on 127.0.0.1:9099 (js_eval, call_bound_method,
+                                 # mouse_*/keyboard_*) to drive the real webview in checks; never ship that tag
 wails3 build                     # production build for the current OS
 wails3 task test                 # Go unit tests + frontend Vitest
 wails3 task lint                 # golangci-lint (pinned, via go run), eslint, prettier --check, tsc
@@ -107,6 +109,7 @@ Dependencies point one way: frontend → `frontend/bindings` → `internal/app` 
 - Prefer table-driven tests. Integration tests carry `//go:build integration` and read DSNs from the env vars set up for `dev/`.
 - No package-level mutable state except the driver registry.
 - Wails service lifecycle: `ServiceStartup(ctx context.Context, opts application.ServiceOptions) error` and `ServiceShutdown() error`. `ServiceShutdown` takes **no** ctx; a version with a ctx parameter is silently never called.
+- Register services in `main.go` through its `service()` helper. Wails v3.1.0 never calls `application.Options.MarshalError`; only `ServiceOptions.MarshalError` reaches bound methods, and without it errors don't arrive as `*apperr.Error`.
 - Bound structs use camelCase JSON tags. After changing a bound method signature or struct, run `wails3 task bindings` and commit the regenerated files.
 
 ## Frontend conventions

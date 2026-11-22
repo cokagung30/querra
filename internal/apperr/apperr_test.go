@@ -36,6 +36,14 @@ func TestFrom(t *testing.T) {
 	}
 }
 
+func TestWithDetail(t *testing.T) {
+	got := WithDetail(NotFound, "get connection c1: not found")
+	want := Error{Code: NotFound, Message: messages[NotFound], Detail: "get connection c1: not found"}
+	if *got != want {
+		t.Errorf("WithDetail = %#v, want %#v", *got, want)
+	}
+}
+
 func TestErrorString(t *testing.T) {
 	if got := New(NotFound, "gone").Error(); got != "gone" {
 		t.Errorf("Error() = %q, want %q", got, "gone")
